@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:atwater:schema:diet-plan-rules:v1",
+  "title": "Atwater diet-plan rules, v1 (DRAFT)",
+  "description": "Shape of ref.diet_plan_version.rules and usr.custom_plan_version.rules when rules_schema_version = 1. Cross-field rules JSON Schema can't express (unique nutrients, one energy_remainder, unit matches canonical unit, UL checks) are enforced by the semantic validator; see docs/design/0001-diet-plan-targets.md D1.",
+  "type": "object",
+  "required": ["schema_version", "nutrients"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "inherit_authority": {
+      "type": "boolean",
+      "default": true,
+      "description": "Nutrients the plan doesn't name take the authority's values."
+    },
+    "energy": {
+      "description": "How the day's energy target is set. Required by pct_energy, per_1000_kcal and energy_remainder targets (semantic check).",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["method"],
+          "additionalProperties": false,
+          "properties": {
+            "method": { "const": "eer", "description": "NASEM EER equations; activity level comes from the account." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["method", "kcal"],
+          "additionalProperties": false,
+          "properties": {
+            "method": { "const": "fixed" },
+            "kcal": { "type": "number", "minimum": 800, "maximum": 6000 }
+          }
+        }
+      ]
+    },
+    "body_mass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["basis"],
+      "description": "Which body mass per-kg nutrient targets use. EER always uses measured mass.",
+      "properties": {
+        "basis": { "enum": ["measured", "reference_bmi"], "default": "measured" },
+        "reference_bmi": { "type": "number", "minimum": 18.5, "maximum": 30, "default": 25 }
+      }
+    },
+    "nutrients": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/target" }
+    }
+  },
+  "$defs": {
+    "nutrientCode": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "description": "ref.nutrient.code, e.g. protein, sodium, vit_d."
+    },
+    "amount": { "type": "number", "minimum": 0 },
+    "target": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "A range on one of the shared bases.",
+          "required": ["nutrient", "basis", "unit"],
+          "additionalProperties": false,
+          "properties": {
+            "nutrient": { "$ref": "#/$defs/nutrientCode" },
+            "basis": { "enum": ["per_day", "pct_energy", "per_kg_body_weight", "per_1000_kcal"] },
+            "low": { "$ref": "#/$defs/amount" },
+            "high": { "$ref": "#/$defs/amount" },
+            "unit": { "type": "string", "minLength": 1, "description": "UCUM code: the nutrient's canonical unit, or % for pct_energy." },
+            "note": { "type": "string" }
+          },
+          "anyOf": [ { "required": ["low"] }, { "required": ["high"] } ]
+        },
+        {
+          "type": "object",
+          "description": "Whatever energy is left after the other macros' targets. One per plan; protein, fat or carbohydrate only.",
+          "required": ["nutrient", "basis"],
+          "additionalProperties": false,
+          "properties": {
+            "nutrient": { "enum": ["protein", "fat", "carbohydrate"] },
+            "basis": { "const": "energy_remainder" },
+            "note": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}
