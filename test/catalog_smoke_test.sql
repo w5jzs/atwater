@@ -70,6 +70,17 @@ SELECT t.check('readers can read energy equations',
   (SELECT count(*) FROM ref.energy_equation WHERE edition = 'smoke-energy') = 1);
 RESET ROLE;
 
+-- NASEM 2023 adult EER seed (0003): all 8 equations, and the sign convention
+-- (negative age coefficient) gives the right number. Hand-computed from
+-- Table S-3, men, inactive, age 40, 180 cm, 105 kg:
+--   753.07 - 10.83*40 + 6.50*180 + 14.10*105 = 2970.37 kcal/d
+SELECT t.check('seed loaded 8 NASEM 2023 adult EER equations',
+  (SELECT count(*) FROM ref.energy_equation WHERE authority_code = 'NASEM_DRI' AND edition = '2023-energy') = 8);
+SELECT t.check('EER formula and signs reproduce a hand-computed value',
+  (SELECT intercept_kcal + age_years_coef * 40 + height_cm_coef * 180 + weight_kg_coef * 105 + extra_kcal
+     FROM ref.energy_equation
+    WHERE edition = '2023-energy' AND life_stage_code = 'NASEM_DRI/M/19+y' AND activity_level = 'inactive') = 2970.37);
+
 -- grants lint: 0005 granted on the tables that existed then, so every later
 -- table needs its own grants. Catch a table someone forgot.
 SELECT t.check('every ref table is readable by catalog_ro and catalog_admin',
