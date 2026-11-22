@@ -113,6 +113,18 @@ INSERT INTO ref.life_stage_group (life_stage_code, authority_code, sex, age_min_
 SELECT t.check('trimester groups can be stored',
   (SELECT gestation_stage FROM ref.life_stage_group WHERE life_stage_code = 'SMOKE/P/T2') = 'trimester_2');
 
+-- US Dietary Guidelines 2025-2030 (seed 0006): a guideline with roles, no ULs
+SELECT t.check('DGA: saturated fat <= 10% of energy for adults, no alcohol in pregnancy',
+  (SELECT amount_high FROM ref.nutrient_reference_value r JOIN ref.nutrient n USING (nutrient_id)
+    WHERE r.authority_code = 'US_DGA' AND r.life_stage_code = 'US_DGA/A/19+y' AND n.code = 'sat_fat') = 10
+  AND (SELECT count(*) FROM ref.nutrient_reference_value r JOIN ref.nutrient n USING (nutrient_id)
+        WHERE r.authority_code = 'US_DGA' AND n.code = 'alcohol' AND r.amount_high = 0) = 2);
+SELECT t.check('DGA sets no upper limits and every value type it uses has a role',
+  NOT EXISTS (SELECT 1 FROM ref.nutrient_reference_value WHERE authority_code = 'US_DGA' AND value_type = 'UL')
+  AND NOT EXISTS (SELECT 1 FROM ref.nutrient_reference_value r WHERE r.authority_code = 'US_DGA'
+                   AND NOT EXISTS (SELECT 1 FROM ref.value_type_role vr
+                                    WHERE vr.authority_code = 'US_DGA' AND vr.value_type = r.value_type)));
+
 -- grants lint: 0005 granted on the tables that existed then, so every later
 -- table needs its own grants. Catch a table someone forgot.
 SELECT t.check('every ref table is readable by catalog_ro and catalog_admin',
