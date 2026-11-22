@@ -136,7 +136,10 @@ Three rules apply whichever method is used:
 
 The group comes from `account.authority_code`, `reference_sex`, age in months on the local date (from `birth_date`), and any `physiological_period` covering that date. The resolver picks the one `ref.life_stage_group` row that matches.
 
-- **No match** (missing birth date or sex, or the catalog doesn't cover that age): the authority layer is empty, plan and override targets still resolve, and the resolution records `no_life_stage_group`. Today the seed only has adults 31–50, so loading the full DRI tables is a prerequisite for real use.
+- **No match** (missing birth date or sex, or the catalog doesn't cover that age): the authority layer is empty, plan and override targets still resolve, and the resolution records `no_life_stage_group`. Seed 0004 covers all NASEM groups, from infants through over-70s, plus pregnancy and lactation.
+- **Infants and young children** use groups with `sex = 'any'`. Match on sex first, then fall back to `any`.
+- **Nutrient targets and the energy equation use different groups.** The NASEM 2023 EER equations come with a single 19+ group per sex (`NASEM_DRI/M/19+y`, `/F/19+y`), which overlaps the DRI age bands. So the resolver makes two lookups for the same date: the DRI group (edition `consolidated-2019`) for nutrient values, and the group containing the user's age that has rows in `ref.energy_equation` for the chosen energy edition (`2023-energy`). Editions are named explicitly, not taken from `is_current`, because NASEM publishes by topic and the catalog allows one current edition per authority.
+- **Protein has two RDAs for adults 31–50:** `per_kg_body_weight` (0.8 g/kg, from seed 0001) and `per_day` (56 g or 46 g, at reference body weight, from seed 0004). Other groups only have `per_day`. When both exist and a body mass is available (D5), use per-kg; otherwise use per-day.
 - **Birthdays matter.** Crossing a group boundary (for example turning 51) changes the inputs on that date, which produces a new resolution from that day on, with no special handling.
 
 ### D7. When targets are computed and what's frozen
