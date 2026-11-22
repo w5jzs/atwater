@@ -10,12 +10,40 @@ BEGIN;
 
 SELECT t.check('running on PostgreSQL 18+', current_setting('server_version_num')::int >= 180000);
 
--- ---------- fixtures (superuser) ----------
-DO $$
+-- ---------- test day ----------
+-- Every fixture lands on the 3rd of the current UTC month. That month is
+-- always inside the window tenant/ops/partitions.sql keeps (the narrowest,
+-- change_log, reaches one month back), and the 3rd keeps local offsets like
+-- -05 from crossing a month boundary. Hard-coded dates drift into DEFAULT.
+CREATE FUNCTION t.day() RETURNS date LANGUAGE sql STABLE
+  AS $$ SELECT date_trunc('month', now() AT TIME ZONE 'UTC')::date + 2 $$;
+CREATE FUNCTION t.at(local_time text) RETURNS timestamptz LANGUAGE sql STABLE
+  AS $$ SELECT (t.day()::text || ' ' || local_time)::timestamptz $$;
+-- Total rows in every usr DEFAULT partition; should stay 0.
+CREATE FUNCTION t.default_partition_rows() RETURNS bigint LANGUAGE plpgsql AS $$
+DECLARE r record; n bigint; total bigint := 0;
 BEGIN
-  IF to_regclass('usr.food_log_entry_p202610') IS NULL THEN
-    CREATE TABLE usr.food_log_entry_p202610 PARTITION OF usr.food_log_entry
-      FOR VALUES FROM ('2026-10-01 00:00:00+00') TO ('2026-11-01 00:00:00+00');
+  FOR r IN SELECT c.oid::regclass AS part
+             FROM pg_class c JOIN pg_namespace ns ON ns.oid = c.relnamespace
+            WHERE ns.nspname = 'usr' AND c.relispartition
+              AND pg_get_expr(c.relpartbound, c.oid) = 'DEFAULT' LOOP
+    EXECUTE format('SELECT count(*) FROM %s', r.part) INTO n;
+    total := total + n;
+  END LOOP;
+  RETURN total;
+END $$;
+
+-- ---------- fixtures (superuser) ----------
+-- This month's food_log partition, so the routing check below doesn't depend
+-- on partitions.sql having run (bootstrap runs it; a bare staging DB may not).
+DO $$
+DECLARE
+  m date := date_trunc('month', t.day())::date;
+  p text := 'food_log_entry_p' || to_char(t.day(), 'YYYYMM');
+BEGIN
+  IF to_regclass(format('usr.%I', p)) IS NULL THEN
+    EXECUTE format('CREATE TABLE usr.%I PARTITION OF usr.food_log_entry FOR VALUES FROM (%L) TO (%L)',
+                   p, m::timestamp AT TIME ZONE 'UTC', (m + interval '1 month')::timestamp AT TIME ZONE 'UTC');
   END IF;
 END $$;
 
@@ -32,7 +60,7 @@ RESET ROLE;
 
 -- a row for user B, written as superuser, that A must never see
 INSERT INTO usr.food_log_entry (user_id, consumed_at, entry_id, local_date, tz, food_version_id, quantity, grams, source_id)
-VALUES ('01900000-0000-7000-8000-00000000000b', '2026-10-03 08:00-05', uuidv7(), '2026-10-03', 'America/Chicago',
+VALUES ('01900000-0000-7000-8000-00000000000b', t.at('08:00-05'), uuidv7(), t.day(), 'America/Chicago',
         '01900000-0000-7000-8000-0000000000a1', 2, 100, '01900000-0000-7000-8000-0000000000d2');
 
 -- ---------- the app, acting as user A ----------
@@ -47,8 +75,8 @@ SELECT t.expect_error('app cannot touch encryption keys',
 
 INSERT INTO usr.food_log_entry (user_id, consumed_at, entry_id, local_date, tz, meal_slot, food_version_id,
                                 quantity, portion_id, grams, source_id, external_id)
-VALUES ('01900000-0000-7000-8000-00000000000a', '2026-10-03 07:30-05', '01900000-0000-7000-8000-0000000000e1',
-        '2026-10-03', 'America/Chicago', 'breakfast', '01900000-0000-7000-8000-0000000000a1',
+VALUES ('01900000-0000-7000-8000-00000000000a', t.at('07:30-05'), '01900000-0000-7000-8000-0000000000e1',
+        t.day(), 'America/Chicago', 'breakfast', '01900000-0000-7000-8000-0000000000a1',
         3, '01900000-0000-7000-8000-0000000000b1', 150, '01900000-0000-7000-8000-0000000000d1', 'import-123');
 
 SELECT t.check('RLS hides other users rows',
@@ -56,12 +84,12 @@ SELECT t.check('RLS hides other users rows',
 
 SELECT t.expect_error('RLS blocks writing as another user',
   $$INSERT INTO usr.food_log_entry (user_id, consumed_at, entry_id, local_date, tz, food_version_id, quantity, grams, source_id)
-    VALUES ('01900000-0000-7000-8000-00000000000b', '2026-10-03 09:00-05', uuidv7(), '2026-10-03', 'UTC',
+    VALUES ('01900000-0000-7000-8000-00000000000b', t.at('09:00-05'), uuidv7(), t.day(), 'UTC',
             '01900000-0000-7000-8000-0000000000a1', 1, 50, '01900000-0000-7000-8000-0000000000d2')$$, '42501');
 
 SELECT t.expect_error('import dedupe on (source, external_id)',
   $$INSERT INTO usr.food_log_entry (user_id, consumed_at, entry_id, local_date, tz, food_version_id, quantity, grams, source_id, external_id)
-    VALUES ('01900000-0000-7000-8000-00000000000a', '2026-10-03 07:30-05', uuidv7(), '2026-10-03', 'UTC',
+    VALUES ('01900000-0000-7000-8000-00000000000a', t.at('07:30-05'), uuidv7(), t.day(), 'UTC',
             '01900000-0000-7000-8000-0000000000a1', 1, 50, '01900000-0000-7000-8000-0000000000d1', 'import-123')$$, '23505');
 
 UPDATE usr.food_log_entry SET quantity = 4, grams = 200
@@ -108,23 +136,24 @@ SET app.user_id = '01900000-0000-7000-8000-00000000000a';
 
 SELECT t.expect_error('cannot log another user''s custom food',
   $$INSERT INTO usr.food_log_entry (user_id, consumed_at, entry_id, local_date, tz, custom_food_version_id, quantity, grams, source_id)
-    VALUES ('01900000-0000-7000-8000-00000000000a', '2026-10-03 12:00-05', uuidv7(), '2026-10-03', 'UTC',
+    VALUES ('01900000-0000-7000-8000-00000000000a', t.at('12:00-05'), uuidv7(), t.day(), 'UTC',
             '01900000-0000-7000-8000-0000000000f2', 1, 100, '01900000-0000-7000-8000-0000000000d1')$$, '23503');
 
 -- one active plan at a time
 INSERT INTO usr.plan_assignment (user_id, assignment_id, plan_version_id, energy_adjust_kcal, valid)
   VALUES ('01900000-0000-7000-8000-00000000000a', uuidv7(), '01900000-0000-7000-8000-0000000000f8', -500,
-          daterange('2026-10-01', NULL));
+          daterange(date_trunc('month', t.day())::date, NULL));
 SELECT t.expect_error('overlapping plan assignments rejected',
   $$INSERT INTO usr.plan_assignment (user_id, assignment_id, plan_version_id, valid)
     VALUES ('01900000-0000-7000-8000-00000000000a', uuidv7(), '01900000-0000-7000-8000-0000000000f9',
-            daterange('2026-12-01', '2027-01-01'))$$, '23P01');
+            daterange((date_trunc('month', t.day()) + interval '2 months')::date,
+                      (date_trunc('month', t.day()) + interval '3 months')::date))$$, '23P01');
 
 -- activity session sanity check
 SELECT t.expect_error('activity must end after it starts',
   $$INSERT INTO usr.activity_session (user_id, started_at, session_id, ended_at, local_date, tz, activity_code, source_id)
-    VALUES ('01900000-0000-7000-8000-00000000000a', '2026-10-03 17:00-05', uuidv7(), '2026-10-03 16:00-05',
-            '2026-10-03', 'UTC', 'TEST-1', '01900000-0000-7000-8000-0000000000d1')$$, '23514');
+    VALUES ('01900000-0000-7000-8000-00000000000a', t.at('17:00-05'), uuidv7(), t.at('16:00-05'),
+            t.day(), 'UTC', 'TEST-1', '01900000-0000-7000-8000-0000000000d1')$$, '23514');
 
 -- sync feed: data_source insert, entry insert, update, soft delete, custom_food,
 -- custom_food_version, plan_assignment = 7 changes; profile edit is not one.
@@ -154,8 +183,8 @@ SELECT t.expect_error('app cannot forge change log rows',
     VALUES ('01900000-0000-7000-8000-00000000000a', 999, 'x', uuidv7(), 'upsert')$$, '42501');
 RESET ROLE;
 
-SELECT t.check('entries routed to the October 2026 partition, not DEFAULT',
-  (SELECT bool_and(tableoid = 'usr.food_log_entry_p202610'::regclass) FROM usr.food_log_entry
+SELECT t.check('entries routed to this month''s partition, not DEFAULT',
+  (SELECT bool_and(tableoid = format('usr.food_log_entry_p%s', to_char(t.day(), 'YYYYMM'))::regclass) FROM usr.food_log_entry
     WHERE user_id IN ('01900000-0000-7000-8000-00000000000a','01900000-0000-7000-8000-00000000000b')));
 
 -- user B has device data from an ingested batch; purge must still cascade
@@ -167,6 +196,10 @@ INSERT INTO usr.ingest_batch (user_id, batch_id, source_id, format, payload_sha2
 INSERT INTO usr.observation_sample (user_id, observed_at, metric_code, source_id, value, ingest_batch_id)
   VALUES ('01900000-0000-7000-8000-00000000000b', now(), 'heart_rate', '01900000-0000-7000-8000-0000000000d4', 62,
           '01900000-0000-7000-8000-0000000000b9');
+
+-- Every fixture row so far (food log, change log, samples, ...) must sit in a
+-- real partition. Catches dates drifting out of the partition window.
+SELECT t.check('no test rows in any DEFAULT partition', t.default_partition_rows() = 0);
 
 SET ROLE purger;
 DELETE FROM usr.account WHERE user_id = '01900000-0000-7000-8000-00000000000b';
@@ -190,8 +223,8 @@ SELECT t.check('tenant cluster holds no catalog tables',
   NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'ref'));
 SELECT t.expect_error('catalog codes are format-checked',
   $$INSERT INTO usr.activity_session (user_id, started_at, session_id, ended_at, local_date, tz, activity_code, source_id)
-    VALUES ('01900000-0000-7000-8000-00000000000a', '2026-10-03 16:00-05', uuidv7(), '2026-10-03 17:00-05',
-            '2026-10-03', 'UTC', 'drop table; --', '01900000-0000-7000-8000-0000000000d1')$$, '23514');
+    VALUES ('01900000-0000-7000-8000-00000000000a', t.at('16:00-05'), uuidv7(), t.at('17:00-05'),
+            t.day(), 'UTC', 'drop table; --', '01900000-0000-7000-8000-0000000000d1')$$, '23514');
 SELECT t.check('no sequences or identity columns in usr',
   NOT EXISTS (SELECT 1 FROM information_schema.columns
                WHERE table_schema = 'usr' AND (is_identity = 'YES' OR column_default LIKE 'nextval%')));
