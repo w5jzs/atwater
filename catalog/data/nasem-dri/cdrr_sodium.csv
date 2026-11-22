@@ -1,0 +1,12 @@
+life_stage,Sodium CDRR (mg/d),printed_as,source_table
+Children 1–3 y,"1,200",Reduce intakes if above 1200 mg/day [a],Appendix J CDRR table
+Children 4–8 y,"1,500",Reduce intakes if above 1500 mg/day [a],Appendix J CDRR table
+Adolescents 9–13 y,"1,800",Reduce intakes if above 1800 mg/day [a],Appendix J CDRR table
+Adolescents 14–18 y,"2,300",Reduce intakes if above 2300 mg/day [a],Appendix J CDRR table
+Adults ≥ 19 y,"2,300",Reduce intakes if above 2300 mg/day,Appendix J CDRR table
+Pregnancy 14–18 y,"2,300",Reduce intakes if above 2300 mg/day [d],Summary Table S-2
+Pregnancy 19–30 y,"2,300",Reduce intakes if above 2300 mg/day,Summary Table S-2
+Pregnancy 31–50 y,"2,300",Reduce intakes if above 2300 mg/day,Summary Table S-2
+Lactation 14–18 y,"2,300",Reduce intakes if above 2300 mg/day [d],Summary Table S-2
+Lactation 19–30 y,"2,300",Reduce intakes if above 2300 mg/day,Summary Table S-2
+Lactation 31–50 y,"2,300",Reduce intakes if above 2300 mg/day,Summary Table S-2
