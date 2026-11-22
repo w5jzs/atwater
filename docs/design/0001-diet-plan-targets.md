@@ -3,7 +3,7 @@
 **Status:** Accepted (2026-11-22). The open questions are settled; see [Resolved questions](#resolved-questions).
 
 **Product stance.** Atwater is a tracker, not a medical service. Users can set any target they want. When a target strays far from the authority's recommended values, the app says so and shows a disclaimer that they should get a doctor's approval. The resolver warns; it doesn't block or clamp.
-**Schema draft:** [diet-plan-rules.v1.schema.json](diet-plan-rules.v1.schema.json)
+**Rules schema:** [targets/schema/diet-plan-rules.v1.schema.json](../../targets/schema/diet-plan-rules.v1.schema.json), validated by `targets.ParseRules`
 
 ## Problem
 

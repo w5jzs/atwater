@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:atwater:schema:diet-plan-rules:v1",
-  "title": "Atwater diet-plan rules, v1 (DRAFT)",
+  "title": "Atwater diet-plan rules, v1",
   "description": "Shape of ref.diet_plan_version.rules and usr.custom_plan_version.rules when rules_schema_version = 1. Cross-field rules JSON Schema can't express (unique nutrients, one energy_remainder, unit matches canonical unit, UL checks) are enforced by the semantic validator; see docs/design/0001-diet-plan-targets.md D1.",
   "type": "object",
   "required": ["schema_version", "nutrients"],
