@@ -125,6 +125,18 @@ SELECT t.check('DGA sets no upper limits and every value type it uses has a role
                    AND NOT EXISTS (SELECT 1 FROM ref.value_type_role vr
                                     WHERE vr.authority_code = 'US_DGA' AND vr.value_type = r.value_type)));
 
+-- DGA decisions (seed 0007): sat fat from age 2, adult protein, no added sugars at any age
+SELECT t.check('DGA covers every age for added sugars, sat fat from 2, protein for adults',
+  (SELECT count(*) FROM ref.nutrient_reference_value r JOIN ref.nutrient n USING (nutrient_id)
+    WHERE r.authority_code = 'US_DGA' AND n.code = 'added_sugars' AND r.amount_high = 0) = 7
+  AND (SELECT count(*) FROM ref.nutrient_reference_value r JOIN ref.nutrient n USING (nutrient_id)
+        WHERE r.authority_code = 'US_DGA' AND n.code = 'sat_fat') = 6
+  AND (SELECT amount_low || '-' || amount_high FROM ref.nutrient_reference_value r JOIN ref.nutrient n USING (nutrient_id)
+        WHERE r.life_stage_code = 'US_DGA/A/19+y' AND n.code = 'protein') = '1.200000-1.600000'
+  AND NOT EXISTS (SELECT 1 FROM ref.nutrient_reference_value r JOIN ref.life_stage_group g USING (life_stage_code)
+                   JOIN ref.nutrient n USING (nutrient_id)
+                   WHERE r.authority_code = 'US_DGA' AND n.code = 'sat_fat' AND g.age_min_months < 24 AND g.physiological_state = 'none'));
+
 -- grants lint: 0005 granted on the tables that existed then, so every later
 -- table needs its own grants. Catch a table someone forgot.
 SELECT t.check('every ref table is readable by catalog_ro and catalog_admin',

@@ -1,6 +1,6 @@
 # 0002 · More than one authority, and supplementary guidelines
 
-**Status:** Accepted for the groundwork (2026-11-22). The open questions at the end don't block it.
+**Status:** Accepted (2026-11-22). The DGA questions are settled; see [Resolved questions](#resolved-questions).
 **Builds on:** [0001 · Diet-plan rules and target resolution](0001-diet-plan-targets.md)
 
 ## Problem
@@ -60,11 +60,11 @@ Source: *Dietary Guidelines for Americans, 2025–2030*, HHS and USDA, January 2
 
 | Statement | Loads as | Status |
 | --- | --- | --- |
-| "saturated fat consumption should not exceed 10% of total daily calories" | `sat_fat` ≤ 10% of energy, adults 19+ | Loaded. No ages are given; see open question 1 |
+| "saturated fat consumption should not exceed 10% of total daily calories" | `sat_fat` ≤ 10% of energy, from age 2 | Loaded (seeds 0006, 0007). The text gives no ages; applied from 2, as earlier editions did |
 | "People who should completely avoid alcohol include pregnant women" | `alcohol` ≤ 0 g/day, pregnancy | Loaded |
 | Sodium < 2,300 mg (14+), < 1,200 / 1,500 / 1,800 (1–3 / 4–8 / 9–13) | — | Not loaded: identical to the NASEM CDRR already in the catalog |
-| "1.2–1.6 grams of protein per kilogram of body weight per day" | — | Not loaded yet; see open question 2 |
-| "no amount of added sugars … is recommended"; "one meal should contain no more than 10 grams" | — | Not loaded: the only number is per meal, and meal-level targets are out of scope (0001). See open question 3 |
+| "1.2–1.6 grams of protein per kilogram of body weight per day" | `protein` 1.2–1.6 g/kg, adults 19+ | Loaded (seed 0007). It's in the general guidance, so children keep NASEM's values |
+| "no amount of added sugars … is recommended"; "Avoid added sugars during infancy and early childhood" | `added_sugars` ≤ 0 g/day, every age | Loaded (seed 0007): any amount logged shows as over the target. The 10 g per-meal limit waits for meal-level targets |
 | Alcohol otherwise: "Consume less alcohol" | — | No number |
 
 ## Schema changes
@@ -76,8 +76,14 @@ Source: *Dietary Guidelines for Americans, 2025–2030*, HHS and USDA, January 2
 | `usr.physiological_period.due_date` | A2 |
 | `usr.account.guideline_codes` (with a column grant for `app_rw`) | A5 |
 
-## Open questions
+## Resolved questions
 
-1. **Saturated-fat ages.** The 2025–2030 text gives no ages for the 10% limit; earlier editions applied it from age 2. It's loaded for adults only until you decide whether to extend it to children.
-2. **DGA protein (1.2–1.6 g/kg/day).** It's a target range, not a limit, and for users who opt in it would raise the adult floor from NASEM's 0.8 g/kg to 1.2 g/kg (126–168 g for a 105 kg adult). Load it?
-3. **Added sugars.** Encode "no amount is recommended" as 0 g/day? That's faithful, but almost any logged food with added sugar would trigger a warning. Or leave it out until meal-level targets exist for the 10 g per-meal limit.
+Settled 2026-11-22:
+
+| # | Question | Decision |
+| --- | --- | --- |
+| 1 | Saturated-fat ages | From age 2, as earlier editions applied it |
+| 2 | DGA protein 1.2–1.6 g/kg/day | Loaded for adults 19+. For users who opt in, it raises the adult floor from 0.8 to 1.2 g/kg (126–168 g at 105 kg) |
+| 3 | Added sugars | Ceiling of 0 g/day at every age, so any amount logged is over the target |
+
+Note on added sugars: FDC Foundation and SR Legacy don't report added sugars at all (nutrient 539: 0 of the 8,217 foods imported on 2026-11-22), so foods from those datasets add nothing to the daily added-sugar total. The ceiling only bites on foods that carry added-sugar data, such as custom foods, recipes and, once imported, branded foods (FDC Branded reports it from the label).

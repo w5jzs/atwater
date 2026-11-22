@@ -176,3 +176,27 @@ func TestMissingRolesIsAnError(t *testing.T) {
 		t.Fatalf("want a missing-roles error, got %v", err)
 	}
 }
+
+// The real DGA 2025-2030 values (seeds 0006 + 0007) for the worked-example
+// man (105 kg, 3211 kcal estimate) who opts in.
+func TestDGAForAnOptedInAdult(t *testing.T) {
+	cat := multiCatalog(t)
+	cat.Nutrients = append(cat.Nutrients, Nutrient{7, "added_sugars", "g"})
+	if err := cat.Index(); err != nil {
+		t.Fatal(err)
+	}
+	cat.Values = append(cat.Values,
+		ReferenceValue{"US_DGA", "2025-2030", "US_DGA/adults", "protein", "DG", BasisPerKg, f(1.2), f(1.6), "g", "total_intake"},
+		ReferenceValue{"US_DGA", "2025-2030", "US_DGA/adults", "added_sugars", "DG", BasisPerDay, nil, f(0), "g", "total_intake"})
+	in := man40()
+	in.Guidelines = dga
+	res, err := Resolve(in, cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// protein: floors 0.8 g/kg*105 = 84 (RDA), 10% E = 80.3, 1.2*105 = 126 -> 126;
+	// ceilings 35% E = 280.96, 1.6*105 = 168 -> 168
+	expect(t, res, "protein", 126, 168, SourceAuthority)
+	expect(t, res, "added_sugars", absent, 0, SourceAuthority) // any amount logged is over
+	expect(t, res, "sat_fat", absent, 0.10*3211/9, SourceAuthority)
+}
