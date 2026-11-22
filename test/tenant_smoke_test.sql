@@ -171,6 +171,20 @@ SELECT t.check('app can set activity level',
   (SELECT activity_level FROM usr.account) = 'low_active');
 SELECT t.expect_error('unknown activity levels rejected',
   $$UPDATE usr.account SET activity_level = 'couch'$$, '23514');
+-- target resolutions carry warnings (0009); default is an empty array
+INSERT INTO usr.target_resolution (user_id, resolution_id, inputs, inputs_hash)
+  VALUES ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000e2', '{}', sha256('r1'));
+INSERT INTO usr.target_resolution (user_id, resolution_id, inputs, inputs_hash, warnings)
+  VALUES ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000e3', '{}', sha256('r2'),
+          '[{"code": "exceeds_upper_limit", "nutrient": "vit_d"}]');
+SELECT t.check('resolution warnings default to an empty array',
+  (SELECT warnings FROM usr.target_resolution WHERE resolution_id = '01900000-0000-7000-8000-0000000000e2') = '[]');
+SELECT t.check('resolution warnings stored',
+  (SELECT warnings->0->>'code' FROM usr.target_resolution WHERE resolution_id = '01900000-0000-7000-8000-0000000000e3')
+    = 'exceeds_upper_limit');
+SELECT t.expect_error('resolution warnings must be an array',
+  $$INSERT INTO usr.target_resolution (user_id, resolution_id, inputs, inputs_hash, warnings)
+    VALUES ('01900000-0000-7000-8000-00000000000a', uuidv7(), '{}', sha256('r3'), '{"code": "x"}')$$, '23514');
 -- open-standard ingest: a Gadgetbridge source, one batch, idempotent re-upload
 INSERT INTO usr.data_source (user_id, source_id, kind, label)
   VALUES ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000d3', 'gadgetbridge', 'Bangle.js 2');
