@@ -38,6 +38,7 @@ The tenant cluster is the source of truth for user data, and the catalog is the 
 | `tenant/migrations/0007_grants_rls.sql` | Role privileges and row-level security |
 | `tenant/migrations/0008_account_activity_level.sql` | `usr.account.activity_level`, the physical-activity category the energy target needs (design 0001) |
 | `tenant/migrations/0009_target_resolution_warnings.sql` | `usr.target_resolution.warnings`, why a target is missing or far from recommended values (design 0001) |
+| `tenant/migrations/0010_pregnancy_due_date_guidelines.sql` | `usr.physiological_period.due_date` (trimester) and `usr.account.guideline_codes` (opt-in guidelines such as US_DGA) (design 0002) |
 | `tenant/ops/partitions.sql` | `ops.ensure_range_partitions()` plus a run that creates partitions around now; idempotent, no pg_partman needed |
 | `bootstrap/bootstrap.sh` | One-command setup: connectivity, database existence, preflight, tracked migrations, partitions, rolled-back smoke tests |
 | `bootstrap/preflight.sql` | Read-only checks run inside each database |

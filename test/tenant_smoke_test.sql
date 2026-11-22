@@ -171,6 +171,21 @@ SELECT t.check('app can set activity level',
   (SELECT activity_level FROM usr.account) = 'low_active');
 SELECT t.expect_error('unknown activity levels rejected',
   $$UPDATE usr.account SET activity_level = 'couch'$$, '23514');
+-- opt-in guidelines (0010): the app can set them; malformed codes are rejected
+UPDATE usr.account SET guideline_codes = '{US_DGA}';
+SELECT t.check('app can set guideline codes', (SELECT guideline_codes FROM usr.account) = '{US_DGA}');
+SELECT t.expect_error('malformed guideline codes rejected',
+  $$UPDATE usr.account SET guideline_codes = '{"drop table; --"}'$$, '23514');
+SELECT t.expect_error('NULL guideline codes rejected',
+  $$UPDATE usr.account SET guideline_codes = '{US_DGA,NULL}'$$, '23514');
+-- pregnancy due date (0010): pregnant periods only
+INSERT INTO usr.physiological_period (user_id, period_id, state, valid, due_date)
+  VALUES ('01900000-0000-7000-8000-00000000000a', uuidv7(), 'pregnant', daterange(t.day(), t.day() + 200), t.day() + 180);
+SELECT t.check('pregnant periods take a due date',
+  (SELECT due_date FROM usr.physiological_period WHERE state = 'pregnant') = t.day() + 180);
+SELECT t.expect_error('due date only on pregnant periods',
+  $$INSERT INTO usr.physiological_period (user_id, period_id, state, valid, due_date)
+    VALUES ('01900000-0000-7000-8000-00000000000a', uuidv7(), 'lactating', daterange(t.day() + 300, t.day() + 400), t.day() + 300)$$, '23514');
 -- target resolutions carry warnings (0009); default is an empty array
 INSERT INTO usr.target_resolution (user_id, resolution_id, inputs, inputs_hash)
   VALUES ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000e2', '{}', sha256('r1'));
