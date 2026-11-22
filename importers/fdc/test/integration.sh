@@ -49,7 +49,13 @@ check "no versions after dry run" 0 "SELECT count(*) FROM ref.food_version"
 check "no dataset row after dry run" 0 "SELECT count(*) FROM ref.dataset"
 
 echo "-- Foundation release 1"
+imp --file "$DATA/foundation_r1.json" --dry-run
+dry_rows="$(sed -nE 's/^ +nutrient rows +([0-9]+).*/\1/p' /tmp/fdc_import.out)"
 imp --file "$DATA/foundation_r1.json" --release 2025-04
+out_has "import reports the same nutrient rows as the dry run" "nutrient rows +$dry_rows \(excluding energy\)"
+check "reported nutrient rows match the catalog (excluding energy)" "$dry_rows" \
+  "SELECT count(*) FROM ref.food_nutrient fn JOIN $V USING (food_version_id) JOIN ref.nutrient n USING (nutrient_id)
+    WHERE d.release_label = '2025-04' AND n.code <> 'energy'"
 check "two food versions" 2 "SELECT count(*) FROM $V WHERE d.code = 'FDC_FOUNDATION'"
 check "hummus energy from Atwater-specific (958)" "166|atwater_specific" \
   "SELECT $(nut 321358 energy)||'|'||energy_method FROM ref.food_version WHERE source_key = '321358'"

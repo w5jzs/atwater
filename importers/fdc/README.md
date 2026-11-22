@@ -83,7 +83,7 @@ dry run (nothing written) finished in 0s
 ## Tests
 
 - `go test ./...`: unit tests for energy selection, nutrient and unit mapping, portions, identity keys and stream parsing.
-- `test/integration.sh`: rebuilds scratch databases with `bootstrap.sh --reset` and runs the binary against `testdata/` fixtures. It checks dry run, release 1, an idempotent rerun, SR Legacy, an interrupted-then-resumed release 2 zip that supersedes release 1, and a refused resume from a different file. 42 checks, passing on PostgreSQL 18.7.
+- `test/integration.sh`: rebuilds scratch databases with `bootstrap.sh --reset` and runs the binary against `testdata/` fixtures. It checks dry run, release 1, an idempotent rerun, SR Legacy, an interrupted-then-resumed release 2 zip that supersedes release 1, and a refused resume from a different file. 44 checks, passing on PostgreSQL 18.7.
 
 ```bash
 CATALOG_DATABASE_URL=... TENANT_DATABASE_URL=... FDC_IMPORT=./importers/fdc/fdc-import ./importers/fdc/test/integration.sh

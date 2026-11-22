@@ -216,8 +216,10 @@ func (im *importer) importFood(ctx context.Context, tx pgx.Tx, f *fdcFood) error
 
 	// Nutrient vector.
 	rows := [][]any{}
+	energyRows := 0
 	if energy.Kcal != nil {
 		rows = append(rows, []any{versionID, im.meta.nutrientsByFDC[fdcEnergyKcal].ID, round6(*energy.Kcal), nil})
+		energyRows = 1
 	} else {
 		im.stats.FoodsWithoutEnergy++
 	}
@@ -230,7 +232,9 @@ func (im *importer) importFood(ctx context.Context, tx pgx.Tx, f *fdcFood) error
 		if err != nil {
 			return err
 		}
-		im.stats.NutrientRows += int(n)
+		// Energy is reported separately (foods without energy), matching the
+		// dry run's "nutrient rows (excluding energy)".
+		im.stats.NutrientRows += int(n) - energyRows
 	}
 
 	// Name as published (primary, en-US).
