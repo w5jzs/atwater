@@ -40,10 +40,18 @@ const (
 	atwaterEnergyNutrientN = "208"
 )
 
-// FDC unitName -> UCUM code.
+// FDC unitName -> UCUM code. Keys are normalized by fdcUnitCode.
 var fdcUnits = map[string]string{
-	"G": "g", "MG": "mg", "UG": "ug", "KCAL": "kcal", "KJ": "kJ",
+	"G": "g", "MG": "mg", "UG": "ug", "MCG": "ug", "KCAL": "kcal", "KJ": "kJ",
 	"MG_ATE": "mg", // vitamin E as alpha-tocopherol equivalents
+}
+
+// fdcUnitCode maps an FDC unitName to UCUM. Real FDC downloads spell
+// micrograms "µg" (U+00B5 MICRO SIGN), which strings.ToUpper turns into
+// Greek capital MU, so micro signs are folded to "u" before the lookup.
+func fdcUnitCode(name string) string {
+	name = strings.NewReplacer("µ", "u", "μ", "u").Replace(strings.TrimSpace(name))
+	return fdcUnits[strings.ToUpper(name)]
 }
 
 type mappedNutrient struct {
@@ -102,7 +110,7 @@ func (m *catalogMeta) mapNutrients(f *fdcFood, st *importStats) []mappedNutrient
 			st.UnmappedNutrients[num+" "+fn.Nutrient.Name]++
 			continue
 		}
-		amount, ok := m.convert(*fn.Amount, fdcUnits[strings.ToUpper(fn.Nutrient.UnitName)], info.Unit)
+		amount, ok := m.convert(*fn.Amount, fdcUnitCode(fn.Nutrient.UnitName), info.Unit)
 		if !ok {
 			st.UnitMismatches[num+" "+fn.Nutrient.UnitName+"->"+info.Unit]++
 			continue

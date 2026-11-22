@@ -139,3 +139,21 @@ func TestStreamRejectsUnsupported(t *testing.T) {
 		t.Errorf("streamed %d foods", n)
 	}
 }
+
+// Real FDC downloads spell micrograms with the micro sign; the original
+// fixtures used "UG" and hid that every µg nutrient was being dropped.
+func TestFDCUnitCode(t *testing.T) {
+	cases := map[string]string{
+		"g": "g", "G": "g", "mg": "mg", "MG": "mg", "kcal": "kcal", "kJ": "kJ",
+		"UG": "ug", "ug": "ug", "mcg": "ug",
+		"µg":   "ug", // MICRO SIGN, as in the real 2018-04 and 2026-10 files
+		"μg":   "ug", // GREEK SMALL MU
+		" µg ": "ug",
+		"IU":   "", "sp gr": "",
+	}
+	for in, want := range cases {
+		if got := fdcUnitCode(in); got != want {
+			t.Errorf("fdcUnitCode(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
