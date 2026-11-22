@@ -22,6 +22,7 @@ The tenant cluster is the source of truth for user data, and the catalog is the 
 | `catalog/migrations/0005_grants.sql` | Append-only privileges |
 | `catalog/migrations/0006_import_support.sql` | `ref.food_identity` (stable food identity across releases) and `ref.import_run` (import log) |
 | `catalog/seed/0001_ref_seed.sql` | Units, 7 authorities, 35 nutrients, NASEM adult 31-50 values, 17 metrics, 6 lab analytes, tags, 11 Open mHealth and 11 GATT mappings |
+| `catalog/seed/0002_ref_nutrients_mn_b5_choline_folate.sql` | Manganese, pantothenic acid, choline and total folate, with NASEM adult 31-50 values; added after the first FDC dry run |
 | `tenant/migrations/0001_foundation.sql` | Version guard, `btree_gist`, `usr`/`ops` schemas, roles, `ops.current_user_id()`, `ops.touch_row()` |
 | `tenant/migrations/0002_usr_core.sql` | Account, physiological periods, data sources, source priority, devices, change log, outbox, `ops.record_change()` |
 | `tenant/migrations/0003_usr_nutrition.sql` | Custom foods/recipes, food log, custom plans, plan assignments, overrides, resolved targets, daily totals |
