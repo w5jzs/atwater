@@ -81,6 +81,22 @@ SELECT t.check('EER formula and signs reproduce a hand-computed value',
      FROM ref.energy_equation
     WHERE edition = '2023-energy' AND life_stage_code = 'NASEM_DRI/M/19+y' AND activity_level = 'inactive') = 2970.37);
 
+-- NASEM DRIs (0004, generated from catalog/data/nasem-dri): every life-stage
+-- group has targets, adults have AMDRs, and spot values match the tables.
+SELECT t.check('NASEM DRIs cover all 22 life-stage groups',
+  (SELECT count(DISTINCT life_stage_code) FROM ref.nutrient_reference_value
+    WHERE authority_code = 'NASEM_DRI' AND edition = 'consolidated-2019') = 22);
+SELECT t.check('every group 1 y and older has fat, carbohydrate and protein AMDRs',
+  NOT EXISTS (SELECT 1 FROM ref.life_stage_group g
+               WHERE g.authority_code = 'NASEM_DRI' AND g.age_min_months >= 12 AND g.life_stage_code NOT LIKE '%/19+y'
+                 AND (SELECT count(*) FROM ref.nutrient_reference_value r
+                       WHERE r.life_stage_code = g.life_stage_code AND r.value_type = 'AMDR') <> 3));
+SELECT t.check('DRI spot values: pregnancy 31-50 zinc RDA 11 mg, men 19-30 copper UL 10 mg',
+  (SELECT amount_low FROM ref.nutrient_reference_value r JOIN ref.nutrient n USING (nutrient_id)
+    WHERE r.life_stage_code = 'NASEM_DRI/P/31-50y' AND n.code = 'zinc' AND r.value_type = 'RDA') = 11
+  AND (SELECT amount_high FROM ref.nutrient_reference_value r JOIN ref.nutrient n USING (nutrient_id)
+    WHERE r.life_stage_code = 'NASEM_DRI/M/19-30y' AND n.code = 'copper' AND r.value_type = 'UL') = 10);
+
 -- grants lint: 0005 granted on the tables that existed then, so every later
 -- table needs its own grants. Catch a table someone forgot.
 SELECT t.check('every ref table is readable by catalog_ro and catalog_admin',
