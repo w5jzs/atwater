@@ -165,6 +165,12 @@ SELECT t.check('change log carries the partition key',
   (SELECT bool_and(entity_ts IS NOT NULL) FROM usr.change_log WHERE entity = 'food_log_entry'));
 SELECT t.check('profile edit bumped account version',
   (SELECT version FROM usr.account) = 2);
+-- activity level: a profile field the app can set (column-level grant, 0008)
+UPDATE usr.account SET activity_level = 'low_active';
+SELECT t.check('app can set activity level',
+  (SELECT activity_level FROM usr.account) = 'low_active');
+SELECT t.expect_error('unknown activity levels rejected',
+  $$UPDATE usr.account SET activity_level = 'couch'$$, '23514');
 -- open-standard ingest: a Gadgetbridge source, one batch, idempotent re-upload
 INSERT INTO usr.data_source (user_id, source_id, kind, label)
   VALUES ('01900000-0000-7000-8000-00000000000a', '01900000-0000-7000-8000-0000000000d3', 'gadgetbridge', 'Bangle.js 2');

@@ -30,6 +30,7 @@ The tenant cluster is the source of truth for user data, and the catalog is the 
 | `tenant/migrations/0005_usr_labs.sql` | Lab reports and encrypted lab results |
 | `tenant/migrations/0006_usr_ingest.sql` | Ingest batches (one row per upload, checksum-deduplicated, replayable) and batch links on device-derived rows |
 | `tenant/migrations/0007_grants_rls.sql` | Role privileges and row-level security |
+| `tenant/migrations/0008_account_activity_level.sql` | `usr.account.activity_level`, the physical-activity category the energy target needs (design 0001) |
 | `tenant/ops/partitions.sql` | `ops.ensure_range_partitions()` plus a run that creates partitions around now; idempotent, no pg_partman needed |
 | `bootstrap/bootstrap.sh` | One-command setup: connectivity, database existence, preflight, tracked migrations, partitions, rolled-back smoke tests |
 | `bootstrap/preflight.sql` | Read-only checks run inside each database |
