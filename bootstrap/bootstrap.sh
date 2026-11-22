@@ -164,8 +164,17 @@ apply_tracked() {   # url component file...
       ok "$comp: $rel (already applied)"
       continue
     fi
-    q "$url" -c "SET atwater.manage_roles = '$MANAGE_ROLES'" -f "$f" >/dev/null
-    q "$url" -c "INSERT INTO atwater_meta.applied (component, filename, sha256) VALUES ('$comp', '$rel', '$sum')"
+    local record="INSERT INTO atwater_meta.applied (component, filename, sha256) VALUES ('$comp', '$rel', '$sum')"
+    if grep -qiE '^[[:space:]]*BEGIN[[:space:]]*;' "$f"; then
+      # The file manages its own transaction, so it's already atomic. Running
+      # it under --single-transaction would let its COMMIT end ours early.
+      q "$url" -c "SET atwater.manage_roles = '$MANAGE_ROLES'" -f "$f" >/dev/null
+      q "$url" -c "$record"
+    else
+      # No transaction of its own: apply it and record it in one transaction,
+      # so a failure part-way leaves nothing behind and nothing recorded.
+      q "$url" --single-transaction -c "SET atwater.manage_roles = '$MANAGE_ROLES'" -f "$f" -c "$record" >/dev/null
+    fi
     ok "$comp: $rel (applied)"
   done
 }
