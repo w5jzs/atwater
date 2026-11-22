@@ -1,6 +1,8 @@
 # 0001 · Diet-plan rules and target resolution
 
-**Status:** Draft for review (2026-11-22). Decisions marked **Proposed** are recommendations; the open questions are listed at the end.
+**Status:** Accepted (2026-11-22). The open questions are settled; see [Resolved questions](#resolved-questions).
+
+**Product stance.** Atwater is a tracker, not a medical service. Users can set any target they want. When a target strays far from the authority's recommended values, the app says so and shows a disclaimer that they should get a doctor's approval. The resolver warns; it doesn't block or clamp.
 **Schema draft:** [diet-plan-rules.v1.schema.json](diet-plan-rules.v1.schema.json)
 
 ## Problem
@@ -46,7 +48,7 @@ The resolver is a pure function in the Go `targets` module: `Resolve(inputs) →
 
 ## Decisions
 
-### D1. Rules document shape (Proposed)
+### D1. Rules document shape
 
 A plan says three things: how to set energy, which nutrient targets it sets, and whether the authority's values fill in everything else.
 
@@ -79,7 +81,7 @@ The JSON Schema enforces shape. A few rules can't be expressed in JSON Schema an
 - `unit` matches the nutrient's canonical unit (or `%` for `pct_energy`);
 - for **catalog** plans, no `high` above the authority's UL for any life-stage group the plan applies to (see D3).
 
-### D2. How layers combine (Proposed)
+### D2. How layers combine
 
 Four layers, lowest to highest: **authority → plan → user override → clinician override.**
 
@@ -97,33 +99,37 @@ Four layers, lowest to highest: **authority → plan → user override → clini
 
 - **`upper_limit` always comes from the authority and no layer changes it.** It's a safety ceiling, not a preference. Keeping it separate from `target_high` is why `daily_target` has both columns.
 
-### D3. Targets above the upper limit (Proposed)
+### D3. Targets far from recommended values
 
-A layer can set `target_high` above `upper_limit`, for example a clinician prescribing high-dose vitamin D.
+A user or clinician can set any target, including above the upper limit (for example high-dose vitamin D) or below the RDA.
 
-- **Catalog plans:** CI rejects them (D1).
-- **User and clinician overrides:** accepted as written. The resolution records a warning (`exceeds_upper_limit`) and the app shows it.
-- **Never clamp silently.** A clamped target hides the conflict, and the user ends up trusting a number nobody set.
+- **User and clinician overrides and custom plans are accepted as written.** The resolution records a warning and the app shows it with the doctor's-approval disclaimer:
+  - `exceeds_upper_limit`: `target_high` above the authority's `upper_limit`;
+  - `below_recommended`: `target_low` below the authority's RDA or AI, or `target_high` below it (a plan that caps a nutrient under the recommended intake);
+  - `energy_far_from_estimate`: see D4.
+- **Catalog plans are the exception.** They're Atwater's own content, so CI rejects any that exceed an upper limit (D1).
+- **Never clamp.** A clamped target hides the conflict, and the user ends up trusting a number they didn't set.
+- **Plausibility bounds stay.** `plan_assignment.energy_adjust_kcal` (±1500) and a fixed plan's `kcal` (800–6000) are typo guards, not medical limits. Typing `-15000` is a mistake, not a choice.
 
-### D4. Energy target (Proposed)
+### D4. Energy target
 
 Energy has no reference value row, so the plan's `energy.method` decides it:
 
 - **`eer`:** the NASEM 2023 Estimated Energy Requirement equations, using sex, age, height, body mass and a physical-activity category, plus the assignment's `energy_adjust_kcal`. NASEM already supplies the other reference values, so this keeps one source.
 - **`fixed`:** the plan states `kcal`, e.g. for clinician-prescribed diets.
-- **Later, `adaptive`:** estimate expenditure from logged intake and the weight trend once there are 2–3 weeks of data, falling back to `eer` before that. It's the most accurate method for weight loss, but it needs data and its own design; it's a v2 method name, not a v1 change.
+- **v2, `adaptive`:** estimate expenditure from logged intake and the weight trend once there are 2–3 weeks of data, falling back to `eer` before that. It's the most accurate method for weight loss. It's committed for v2 and needs its own design. v1 already leaves room: it's one more `method` value.
 
 Three rules apply whichever method is used:
 
 - **The activity category is a person attribute, not a plan attribute.** It needs a new `usr.account.activity_level` column (inactive, low active, active, very active, matching NASEM's categories). Logged activity sessions do **not** add to the target in v1: the category already accounts for usual activity, so adding sessions would count it twice.
 - **The equation coefficients are catalog data**, in a new append-only `ref.energy_equation` table keyed by authority, edition and life-stage group. The resolver code implements the formula's shape only. That matches how the ingest mappings work: data, not an app release. *Schema change.*
-- **Energy floor.** `energy_adjust_kcal` allows -1500 kcal, and on a small person that produces a target nobody should follow. The resolver applies a floor (see open question 2) and records a `below_energy_floor` warning when the plan and adjustment would go under it. This is the one place it clamps, because the failure mode is harm, not a confusing number.
+- **No energy floor.** Under the product stance, the target is whatever the plan and adjustment produce. When it differs from the EER by more than 25% (a tunable default, recorded in the inputs), the resolution records `energy_far_from_estimate` and the app shows the disclaimer. Without an EER (for example a `fixed` plan with no body mass on record), there's nothing to compare against and no warning.
 
-### D5. Body mass used for per-kg targets and EER (Proposed)
+### D5. Body mass used for per-kg targets and EER
 
 - **Use a trend, not the latest reading.** Daily weight swings 1–2 kg with water and food, and per-kg targets would swing with it. Take the mean of `body_mass` readings in the 7 days up to and including the local date.
 - **Staleness.** If there's no reading in those 7 days, use the most recent reading up to 90 days old and record a `stale_body_mass` warning. Beyond 90 days, or with no reading at all, per-kg targets and EER don't resolve: those rows are left out and the resolution records why. Guessing a weight is worse than showing no target.
-- **Reference weight for people well above a healthy weight.** Per-kg protein on actual weight overshoots badly at high body fat. The plan's `body_mass.basis` can be `measured` (default) or `reference_bmi`, which is the weight at the given BMI (default 25) for the user's height. Example: at 180 cm, BMI 25 is 81 kg. For a 105 kg person, 1.6 g/kg is 130 g of protein on reference weight versus 168 g on measured weight. EER always uses measured weight; only per-kg nutrient targets follow `body_mass.basis`.
+- **Reference weight for people well above a healthy weight.** Per-kg protein on actual weight overshoots badly at high body fat. The plan's `body_mass.basis` can be `measured` (default) or `reference_bmi`, which is the weight at the given BMI (default 25) for the user's height. BMI 25 is a starting rule we can revisit; a named clinical formula would be a new `basis` value, so plans written now keep working. Example: at 180 cm, BMI 25 is 81 kg. For a 105 kg person, 1.6 g/kg is 130 g of protein on reference weight versus 168 g on measured weight. EER always uses measured weight; only per-kg nutrient targets follow `body_mass.basis`.
 - **Round the weight used to 0.5 kg** before it goes into the inputs. Without that, nearly every day hashes to a new `target_resolution`. With it, consecutive days share one resolution until the trend actually moves.
 
 ### D6. Life-stage group
@@ -133,13 +139,13 @@ The group comes from `account.authority_code`, `reference_sex`, age in months on
 - **No match** (missing birth date or sex, or the catalog doesn't cover that age): the authority layer is empty, plan and override targets still resolve, and the resolution records `no_life_stage_group`. Today the seed only has adults 31–50, so loading the full DRI tables is a prerequisite for real use.
 - **Birthdays matter.** Crossing a group boundary (for example turning 51) changes the inputs on that date, which produces a new resolution from that day on, with no special handling.
 
-### D7. When targets are computed and what's frozen (Proposed)
+### D7. When targets are computed and what's frozen
 
 - **Materialize ahead:** a worker keeps `daily_target` filled from today through today + 7 days, in the user's time zone.
 - **Recompute on change:** plan assignment, override, physiological period, profile (birth date, sex, height, activity level), or a new body-mass reading within the 7-day window. Recomputing means building inputs, hashing them, reusing a matching `target_resolution` if one exists, and replacing the `daily_target` rows for the affected dates.
-- **The past is frozen.** Dates before today in the user's time zone are never recomputed, so a week is judged against the targets that were shown during that week. Today stays recomputable until local midnight, so a morning weigh-in updates today's targets.
+- **The past is frozen, with a grace period for yesterday.** A day's targets freeze at **local midnight + 4 hours**. Until then, yesterday is still editable: someone changing their plan or adjustment at 00:30 after a late evening can still have it apply to the day they just finished. After 04:00 local, yesterday is frozen like every earlier day, and a week is judged against the targets that were in force during it. Today is always recomputable, so a morning weigh-in updates today's targets. The 4 hours is a tunable default.
 - **Backfilled data doesn't rewrite history.** A weight entered for last Tuesday affects future trends, not last Tuesday's targets.
-- **Plan assignments can't start in the past** (middleware check). A backdated assignment would conflict with frozen history. See open question 3.
+- **Plan assignments and overrides can start no earlier than the oldest unfrozen day:** today, or yesterday during the grace period. The middleware checks this. Anything earlier would conflict with frozen history.
 
 ### D8. Provenance and versioning
 
@@ -157,7 +163,7 @@ Inputs are serialized as canonical JSON (RFC 8785) before hashing, so the same i
 Two more pieces of provenance:
 
 - **Resolver version is an input.** When the algorithm changes, new resolutions get new hashes and old rows stay as they were. No migration rewrites history.
-- **Warnings are stored**, in a new `target_resolution.warnings jsonb` column (`exceeds_upper_limit`, `below_energy_floor`, `stale_body_mass`, `no_life_stage_group`, `unresolved_nutrient`), so the app can explain a missing or odd target. *Schema change.*
+- **Warnings are stored**, in a new `target_resolution.warnings jsonb` column (`exceeds_upper_limit`, `below_recommended`, `energy_far_from_estimate`, `stale_body_mass`, `no_life_stage_group`, `unresolved_nutrient`), so the app can explain a missing or odd target and know when to show the disclaimer. *Schema change.*
 
 ### D9. Conversions to stored units
 
@@ -196,14 +202,20 @@ This becomes one `target_resolution` row and about 35 `daily_target` rows per da
 
 None of these touch existing data, and each is a new migration rather than an edit.
 
-## Open questions
+## Resolved questions
 
-1. **Upper limits on user overrides:** accept with a warning (proposed in D3), or refuse?
-2. **Energy floor:** what value? A common clinical rule of thumb is about 1,200 kcal for women and 1,500 for men, or a percentage of EER. It needs a source we're willing to cite.
-3. **Backdated plan assignments:** refuse (proposed in D7), or allow them and recompute the past, giving up frozen history for those days?
-4. **Body-mass window:** are 7 days for the trend and 90 days for staleness the right numbers? An exponentially weighted average is the obvious alternative.
-5. **Adaptive energy (v2):** worth committing to now, so the v1 rules leave room for it? The `method` field already does.
-6. **Is `reference_bmi` with a default of 25 the right adjusted-weight rule**, or do we want a named clinical formula?
+Settled 2026-11-22:
+
+| # | Question | Decision |
+| --- | --- | --- |
+| 1 | Upper limits on user overrides | Accept anything; warn and show the doctor's-approval disclaimer. Atwater is a tracker, not a medical service (D3) |
+| 2 | Energy floor | None, for the same reason. Warn when energy is more than 25% from the EER (D4) |
+| 3 | Backdated plan assignments | Keep the freeze, with a grace period: yesterday stays editable until 04:00 local (D7) |
+| 4 | Body-mass window | 7-day mean, readings up to 90 days old with a warning (D5) |
+| 5 | Adaptive energy | Committed for v2 (D4) |
+| 6 | Adjusted body weight | BMI 25 for now; revisit later (D5) |
+
+Two defaults came out of these and are tunable, not fixed: the 25% energy warning threshold and the 4-hour grace period.
 
 ## Not in scope
 
