@@ -52,5 +52,40 @@ SELECT t.expect_error('mappings must target a known metric',
 SELECT t.expect_error('only omh/ieee schema namespaces',
   $$INSERT INTO ref.omh_schema_map (namespace, schema_name, metric_code, value_path) VALUES ('acme','x','steps','$.x')$$, '23514');
 
+-- energy equations (0007): append-only data, one row per edition, group and activity level.
+-- Coefficients below are dummies for the test, not real NASEM values.
+SET ROLE catalog_admin;
+INSERT INTO ref.authority_edition (authority_code, edition) VALUES ('NASEM_DRI', 'smoke-energy');
+INSERT INTO ref.energy_equation (authority_code, edition, life_stage_code, activity_level,
+                                 intercept_kcal, age_years_coef, height_cm_coef, weight_kg_coef)
+  VALUES ('NASEM_DRI', 'smoke-energy', 'NASEM_DRI/M/31-50y', 'low_active', 1000, -10, 5, 15);
+SELECT t.expect_error('energy equations are append-only',
+  $$UPDATE ref.energy_equation SET intercept_kcal = 1 WHERE edition = 'smoke-energy'$$, '42501');
+SELECT t.expect_error('energy equations need a known activity level',
+  $$INSERT INTO ref.energy_equation (authority_code, edition, life_stage_code, activity_level, intercept_kcal)
+    VALUES ('NASEM_DRI', 'smoke-energy', 'NASEM_DRI/F/31-50y', 'couch', 1)$$, '23514');
+RESET ROLE;
+SET ROLE catalog_ro;
+SELECT t.check('readers can read energy equations',
+  (SELECT count(*) FROM ref.energy_equation WHERE edition = 'smoke-energy') = 1);
+RESET ROLE;
+
+-- grants lint: 0005 granted on the tables that existed then, so every later
+-- table needs its own grants. Catch a table someone forgot.
+SELECT t.check('every ref table is readable by catalog_ro and catalog_admin',
+  NOT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+               WHERE n.nspname = 'ref' AND c.relkind IN ('r','p')
+                 AND NOT (has_table_privilege('catalog_ro', c.oid, 'SELECT')
+                          AND has_table_privilege('catalog_admin', c.oid, 'SELECT'))));
+SELECT t.check('catalog_admin can insert into every ref table',
+  NOT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+               WHERE n.nspname = 'ref' AND c.relkind IN ('r','p')
+                 AND NOT has_table_privilege('catalog_admin', c.oid, 'INSERT')));
+SELECT t.check('no catalog role can delete from any ref table',
+  NOT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+               WHERE n.nspname = 'ref' AND c.relkind IN ('r','p')
+                 AND (has_table_privilege('catalog_ro', c.oid, 'DELETE')
+                      OR has_table_privilege('catalog_admin', c.oid, 'DELETE'))));
+
 ROLLBACK;
 \echo 'CATALOG SMOKE TESTS PASSED (rolled back)'
