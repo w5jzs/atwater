@@ -62,6 +62,7 @@ GRANT catalog_admin TO <importer_user> WITH INHERIT FALSE, SET TRUE;
 - **Nutrients map by FDC nutrient number** via `ref.nutrient.fdc_nutrient_number`. Foundation's total sugars (269.3) is aliased to 269. Anything unmapped is counted and reported, not dropped silently; add the nutrient to `ref.nutrient` to start importing it.
 - **Units convert within a dimension** (g ↔ mg ↔ µg). Values that can't convert, such as IU into µg, are skipped and reported as unit mismatches.
 - **Idempotent and resumable.** Each batch commits on its own. Foods already present for the dataset release are skipped, so an interrupted run continues by running it again.
+- **One file per release label.** Resuming is refused if any earlier run for that release (failed runs included) read a file with a different SHA-256. Otherwise a different download under the same label would silently keep the first file's foods, and the append-only catalog can't delete them. Give a different download its own `--release`.
 - **New releases supersede, history stays.** Importing a newer release adds new versions under the same food, marks the old versions not current, and points them at their replacement. Logged meals keep referencing the version they were logged against. A food missing from a newer release stays current.
 
 ## Example report (dry run on the test fixture)
@@ -82,7 +83,7 @@ dry run (nothing written) finished in 0s
 ## Tests
 
 - `go test ./...`: unit tests for energy selection, nutrient and unit mapping, portions, identity keys and stream parsing.
-- `test/integration.sh`: rebuilds scratch databases with `bootstrap.sh --reset` and runs the binary against `testdata/` fixtures. It checks dry run, release 1, an idempotent rerun, SR Legacy, and an interrupted-then-resumed release 2 zip that supersedes release 1. 38 checks, passing on PostgreSQL 18.4.
+- `test/integration.sh`: rebuilds scratch databases with `bootstrap.sh --reset` and runs the binary against `testdata/` fixtures. It checks dry run, release 1, an idempotent rerun, SR Legacy, an interrupted-then-resumed release 2 zip that supersedes release 1, and a refused resume from a different file. 42 checks, passing on PostgreSQL 18.7.
 
 ```bash
 CATALOG_DATABASE_URL=... TENANT_DATABASE_URL=... FDC_IMPORT=./importers/fdc/fdc-import ./importers/fdc/test/integration.sh

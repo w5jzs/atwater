@@ -8,7 +8,8 @@
 //   - Writes as catalog_admin (SET ROLE), so the catalog's append-only grants
 //     apply even when you connect as a more powerful user.
 //   - Idempotent: foods already loaded for this dataset release are skipped,
-//     so an interrupted run is resumed by running it again.
+//     so an interrupted run is resumed by running it again. Resuming is
+//     refused if the release was started from a different file (SHA-256).
 //   - New releases reuse each food's identity (NDB number) and supersede the
 //     previous version; history that points at old versions is untouched.
 //   - --dry-run parses and maps everything and prints the report, writing nothing.
@@ -122,6 +123,13 @@ func run() error {
 	datasetID, created, err := ensureDataset(ctx, conn, stream.DatasetCode, *release, name)
 	if err != nil {
 		return fmt.Errorf("dataset row: %w", err)
+	}
+	if !created {
+		// Resume skips foods already present for this release, so it is only
+		// safe when the earlier runs read this exact file.
+		if err := checkResumeSource(ctx, conn, datasetID, *release, sum); err != nil {
+			return err
+		}
 	}
 	fmt.Printf("dataset_id %d (%s)\n", datasetID, map[bool]string{true: "new", false: "existing; resuming"}[created])
 

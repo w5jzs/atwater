@@ -72,6 +72,29 @@ func ensureDataset(ctx context.Context, conn *pgx.Conn, code, release, name stri
 	return id, true, err
 }
 
+// checkResumeSource refuses to resume a dataset release from a different file
+// than the one it was started from. Resume skips foods already present for
+// the release, so a different download under the same label would silently
+// keep the old file's versions, and the append-only catalog can't delete them.
+// Every earlier run counts, failed ones included: their batches committed.
+func checkResumeSource(ctx context.Context, conn *pgx.Conn, datasetID int16, release string, sum []byte) error {
+	var file string
+	var other []byte
+	err := conn.QueryRow(ctx, `
+		SELECT source_file, source_sha256 FROM ref.import_run
+		 WHERE dataset_id = $1 AND source_sha256 IS DISTINCT FROM $2
+		 ORDER BY started_at LIMIT 1`, datasetID, sum).Scan(&file, &other)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("checking earlier runs for this release: %w", err)
+	}
+	return fmt.Errorf("release %q was already imported from a different file (%s, sha256 %x); "+
+		"resuming would keep that file's foods. Use a new --release label for a different download, "+
+		"or rerun with the original file to resume", release, file, other[:min(6, len(other))])
+}
+
 type importer struct {
 	conn        *pgx.Conn
 	meta        *catalogMeta

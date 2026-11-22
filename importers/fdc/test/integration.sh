@@ -109,8 +109,16 @@ check "egg (absent from release 2) stays current" t "SELECT is_current FROM ref.
 check "exactly one current version per food" 0 \
   "SELECT count(*) FROM (SELECT food_id FROM ref.food_version WHERE is_current GROUP BY food_id HAVING count(*) > 1) x"
 
+echo "-- resume refuses a different file under a used release label"
+imp_fails --file "$DATA/foundation_r1.json" --release 2025-12
+out_has "different file for 2025-12 refused" "already imported from a different file \(foundation_r2.zip"
+check "refused import wrote no versions" 2 "SELECT count(*) FROM $V WHERE d.release_label = '2025-12'"
+check "refused import logged no run" 5 "SELECT count(*) FROM ref.import_run"
+imp --file "$DATA/foundation_r2.zip" --release 2025-12
+out_has "original file still resumes" "already loaded +2"
+
 echo "-- run log"
-check "every import run recorded" 5 "SELECT count(*) FROM ref.import_run"
+check "every import run recorded" 6 "SELECT count(*) FROM ref.import_run"
 check "no run left running" 0 "SELECT count(*) FROM ref.import_run WHERE status <> 'done'"
 check "run log keeps file names, never local paths" 0 "SELECT count(*) FROM ref.import_run WHERE source_file LIKE '%/%'"
 
