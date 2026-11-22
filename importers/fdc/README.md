@@ -23,10 +23,15 @@ export CATALOG_DATABASE_URL='postgres://USER:PASS@HOST:5432/atwater_catalog?sslm
 # 1. Check mappings against the real file. Writes nothing.
 ./fdc-import --file FoodData_Central_foundation_food_json_2025-12-18.zip --dry-run
 
-# 2. Import. --release labels this download; reruns with the same label resume.
-./fdc-import --file FoodData_Central_foundation_food_json_2025-12-18.zip --release 2025-12
-./fdc-import --file FoodData_Central_sr_legacy_food_json_2018-04.zip   --release 2018-04
+# 2. Import. The release label comes from the file name's date (2025-12-18,
+#    2018-04); rerunning the same file resumes.
+./fdc-import --file FoodData_Central_foundation_food_json_2025-12-18.zip
+./fdc-import --file FoodData_Central_sr_legacy_food_json_2018-04.zip
 ```
+
+Keep FDC's file names. The label decides which dataset release the foods land in, and the catalog is append-only, so a wrong label can't be undone: it creates a bogus release whose versions supersede the real ones. So:
+- With FDC's name, `--release` is optional. If you pass one, it must equal the file name's date unless you add `--force-release`.
+- A renamed file has no date to read, so `--release` is required.
 
 The connecting user needs SET membership in `catalog_admin`. The importer switches into that role, so the catalog's append-only rules apply even if you connect as a more powerful user:
 
@@ -37,7 +42,8 @@ GRANT catalog_admin TO <importer_user> WITH INHERIT FALSE, SET TRUE;
 | Flag | Meaning |
 | --- | --- |
 | `--file` | FDC JSON file, or the `.zip` containing exactly one JSON |
-| `--release` | Release label, e.g. `2025-12`. Required unless `--dry-run` |
+| `--release` | Release label. Defaults to the date in FDC's file name (`2025-12-18`, or `2018-04` for SR Legacy). Required when the name has no date, unless `--dry-run` |
+| `--force-release` | Accept a `--release` that differs from the file name's date |
 | `--dry-run` | Parse and map everything, print the report, write nothing |
 | `--batch` | Foods per transaction (default 250) |
 | `--limit` | Stop after N foods, for trial runs |
@@ -47,7 +53,7 @@ GRANT catalog_admin TO <importer_user> WITH INHERIT FALSE, SET TRUE;
 
 | FDC | Catalog |
 | --- | --- |
-| Dataset + `--release` | `ref.dataset` (license CC0-1.0); id assigned once, never reused |
+| Dataset + release label | `ref.dataset` (license CC0-1.0); id assigned once, never reused |
 | NDB number (fdcId if absent) | `ref.food_identity` → `ref.food`: the same food across releases |
 | Each food | One immutable `ref.food_version` (source key = fdcId) |
 | Food nutrients | `ref.food_nutrient`, per 100 g, converted to each nutrient's canonical unit |
@@ -62,7 +68,7 @@ GRANT catalog_admin TO <importer_user> WITH INHERIT FALSE, SET TRUE;
 - **Nutrients map by FDC nutrient number** via `ref.nutrient.fdc_nutrient_number`. Foundation's total sugars (269.3) is aliased to 269. Anything unmapped is counted and reported, not dropped silently; add the nutrient to `ref.nutrient` to start importing it.
 - **Units convert within a dimension** (g ↔ mg ↔ µg). Values that can't convert, such as IU into µg, are skipped and reported as unit mismatches.
 - **Idempotent and resumable.** Each batch commits on its own. Foods already present for the dataset release are skipped, so an interrupted run continues by running it again.
-- **One file per release label.** Resuming is refused if any earlier run for that release (failed runs included) read a file with a different SHA-256. Otherwise a different download under the same label would silently keep the first file's foods, and the append-only catalog can't delete them. Give a different download its own `--release`.
+- **One file per release label.** Resuming is refused if any earlier run for that release (failed runs included) read a file with a different SHA-256. Otherwise a different download under the same label would silently keep the first file's foods, and the append-only catalog can't delete them. A different download gets its own label automatically, since FDC file names carry the release date.
 - **New releases supersede, history stays.** Importing a newer release adds new versions under the same food, marks the old versions not current, and points them at their replacement. Logged meals keep referencing the version they were logged against. A food missing from a newer release stays current.
 
 ## Example report (dry run on the test fixture)
@@ -83,7 +89,7 @@ dry run (nothing written) finished in 0s
 ## Tests
 
 - `go test ./...`: unit tests for energy selection, nutrient and unit mapping, portions, identity keys and stream parsing.
-- `test/integration.sh`: rebuilds scratch databases with `bootstrap.sh --reset` and runs the binary against `testdata/` fixtures. It checks dry run, release 1, an idempotent rerun, SR Legacy, an interrupted-then-resumed release 2 zip that supersedes release 1, and a refused resume from a different file. 44 checks, passing on PostgreSQL 18.7.
+- `test/integration.sh`: rebuilds scratch databases with `bootstrap.sh --reset` and runs the binary against `testdata/` fixtures. It checks dry run, release 1, an idempotent rerun, SR Legacy, an interrupted-then-resumed release 2 zip that supersedes release 1, a refused resume from a different file, and release labels taken from (or checked against) the file name. 51 checks, passing on PostgreSQL 18.7.
 
 ```bash
 CATALOG_DATABASE_URL=... TENANT_DATABASE_URL=... FDC_IMPORT=./importers/fdc/fdc-import ./importers/fdc/test/integration.sh

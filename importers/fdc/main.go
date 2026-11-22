@@ -1,7 +1,7 @@
 // fdc-import loads a USDA FoodData Central full download (Foundation or
 // SR Legacy, JSON or the .zip it ships in) into the Atwater catalog.
 //
-//	CATALOG_DATABASE_URL=postgres://... fdc-import --file FoodData_Central_foundation_food_json_2025-12-18.zip --release 2025-12
+//	CATALOG_DATABASE_URL=postgres://... fdc-import --file FoodData_Central_foundation_food_json_2025-12-18.zip
 //
 // Behaviour:
 //   - Streams the file; memory stays flat regardless of file size.
@@ -12,6 +12,8 @@
 //     refused if the release was started from a different file (SHA-256).
 //   - New releases reuse each food's identity (NDB number) and supersede the
 //     previous version; history that points at old versions is untouched.
+//   - The release label defaults to the date in the FDC file name; a
+//     --release that disagrees with it needs --force-release.
 //   - --dry-run parses and maps everything and prints the report, writing nothing.
 package main
 
@@ -25,6 +27,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -41,7 +44,8 @@ func main() {
 
 func run() error {
 	file := flag.String("file", "", "FDC full-download JSON file, or the .zip containing it")
-	release := flag.String("release", "", "release label for this download, e.g. 2025-12 (required unless --dry-run)")
+	release := flag.String("release", "", "release label; defaults to the date in the FDC file name (e.g. 2025-12-18)")
+	forceRelease := flag.Bool("force-release", false, "allow a --release that differs from the date in the file name")
 	batch := flag.Int("batch", 250, "foods per transaction")
 	limit := flag.Int("limit", 0, "stop after N foods (0 = all); for trial runs")
 	dryRun := flag.Bool("dry-run", false, "parse and map only; write nothing")
@@ -51,9 +55,14 @@ func run() error {
 	if *file == "" {
 		return errors.New("--file is required")
 	}
-	if !*dryRun && *release == "" {
-		return errors.New("--release is required (e.g. --release 2025-12)")
+	rel, relSource, err := resolveRelease(*file, *release, *forceRelease)
+	if err != nil {
+		return err
 	}
+	if !*dryRun && rel == "" {
+		return errors.New("--release is required: the file name has no FDC release date (e.g. --release 2025-12-18)")
+	}
+	*release = rel
 	dbURL := os.Getenv("CATALOG_DATABASE_URL")
 	if dbURL == "" {
 		return errors.New("CATALOG_DATABASE_URL is not set")
@@ -92,6 +101,9 @@ func run() error {
 	st := newStats()
 	start := time.Now()
 	fmt.Printf("dataset %s (%s), file %s, sha256 %x\n", stream.DatasetCode, stream.Root, filepath.Base(*file), sum[:6])
+	if *release != "" {
+		fmt.Printf("release %s (%s)\n", *release, relSource)
+	}
 
 	if *dryRun {
 		for {
@@ -183,6 +195,43 @@ func run() error {
 	}
 	report(st, time.Since(start), false)
 	return nil
+}
+
+// fdcFileDate matches the release date FDC puts in its download names:
+// FoodData_Central_foundation_food_json_2025-12-18.zip,
+// FoodData_Central_sr_legacy_food_json_2018-04.zip (SR Legacy has no day).
+var fdcFileDate = regexp.MustCompile(`(?i)^FoodData_Central_.*_(\d{4}-\d{2}(?:-\d{2})?)\.(?:zip|json)$`)
+
+func releaseFromFilename(path string) (string, bool) {
+	m := fdcFileDate.FindStringSubmatch(filepath.Base(path))
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
+}
+
+// resolveRelease picks the release label. The date in the FDC file name is
+// the default, because a label that doesn't match the file creates (or
+// resumes) the wrong dataset release, and the append-only catalog can't undo
+// that. An explicit --release must agree with it unless --force-release.
+// Returns "" when there's no label (file name has no date, none given).
+func resolveRelease(file, release string, force bool) (label, source string, err error) {
+	fromName, ok := releaseFromFilename(file)
+	switch {
+	case release == "" && ok:
+		return fromName, "from file name", nil
+	case release == "":
+		return "", "", nil
+	case !ok:
+		return release, "from --release", nil
+	case release == fromName:
+		return release, "from --release, matches file name", nil
+	case force:
+		return release, "from --release, overriding file name date " + fromName + " (--force-release)", nil
+	default:
+		return "", "", fmt.Errorf("--release %q doesn't match the file name's release date %q; "+
+			"omit --release to use %q, or add --force-release if the label is deliberate", release, fromName, fromName)
+	}
 }
 
 func fileSHA256(path string) ([]byte, error) {

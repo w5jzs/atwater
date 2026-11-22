@@ -128,4 +128,22 @@ check "every import run recorded" 6 "SELECT count(*) FROM ref.import_run"
 check "no run left running" 0 "SELECT count(*) FROM ref.import_run WHERE status <> 'done'"
 check "run log keeps file names, never local paths" 0 "SELECT count(*) FROM ref.import_run WHERE source_file LIKE '%/%'"
 
+echo "-- release label defaults to the file name's date"
+# Same bytes as foundation_r2.zip (imported above as 2025-12), under FDC's naming.
+DATED=/tmp/FoodData_Central_foundation_food_json_2025-12-18.zip
+cp "$DATA/foundation_r2.zip" "$DATED"
+runs_before="$(sql "SELECT count(*) FROM ref.import_run")"
+imp_fails --file "$DATED" --release 2026-10
+out_has "release contradicting the file name refused" "doesn't match the file name's release date \"2025-12-18\""
+check "refused label created no dataset" 0 "SELECT count(*) FROM ref.dataset WHERE release_label = '2026-10'"
+imp --file "$DATED" --release 2025-12 --force-release
+out_has "--force-release accepts the deliberate label" "overriding file name date 2025-12-18"
+out_has "forced label resumes the same file" "already loaded +2"
+imp --file "$DATED"
+out_has "label taken from the file name" "release 2025-12-18 \(from file name\)"
+check "dataset created under the file name's date" 2 \
+  "SELECT count(*) FROM $V WHERE d.code = 'FDC_FOUNDATION' AND d.release_label = '2025-12-18'"
+check "only the two accepted runs were logged" $((runs_before + 2)) "SELECT count(*) FROM ref.import_run"
+rm -f "$DATED"
+
 echo "ALL $pass FDC IMPORTER CHECKS PASSED"
