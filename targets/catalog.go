@@ -12,6 +12,7 @@ type Catalog struct {
 	Nutrients       []Nutrient
 	LifeStages      []LifeStage
 	Values          []ReferenceValue
+	Roles           []ValueTypeRole
 	EnergyEquations []EnergyEquation
 
 	byCode map[string]Nutrient
@@ -31,6 +32,7 @@ type LifeStage struct {
 	AgeMinMonths       int
 	AgeMaxMonths       *int // exclusive; nil = open-ended
 	PhysiologicalState string
+	GestationStage     string // trimester_1..3, or "" (design 0002 A2)
 }
 
 type ReferenceValue struct {
@@ -43,6 +45,14 @@ type ReferenceValue struct {
 	Low, High *float64
 	Unit      string
 	AppliesTo string // total_intake, supplements_only, food_only
+}
+
+// ValueTypeRole says what an authority's value type does (design 0002 A1):
+// recommended, target, upper_limit or none.
+type ValueTypeRole struct {
+	Authority string
+	ValueType string
+	Role      string
 }
 
 type EnergyEquation struct {

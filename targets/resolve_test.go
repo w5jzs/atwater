@@ -13,11 +13,11 @@ func resolverCatalog(t *testing.T) *Catalog {
 	t.Helper()
 	c := testCatalog(t)
 	c.LifeStages = []LifeStage{
-		{"NASEM_DRI/M/31-50y", "NASEM_DRI", "male", 372, ip(612), "none"},
-		{"NASEM_DRI/M/19+y", "NASEM_DRI", "male", 228, nil, "none"},
-		{"NASEM_DRI/F/19+y", "NASEM_DRI", "female", 228, nil, "none"},
-		{"NASEM_DRI/P/31-50y", "NASEM_DRI", "female", 372, ip(612), "pregnant"},
-		{"NASEM_DRI/I/0-6mo", "NASEM_DRI", "any", 0, ip(6), "none"},
+		{"NASEM_DRI/M/31-50y", "NASEM_DRI", "male", 372, ip(612), "none", ""},
+		{"NASEM_DRI/M/19+y", "NASEM_DRI", "male", 228, nil, "none", ""},
+		{"NASEM_DRI/F/19+y", "NASEM_DRI", "female", 228, nil, "none", ""},
+		{"NASEM_DRI/P/31-50y", "NASEM_DRI", "female", 372, ip(612), "pregnant", ""},
+		{"NASEM_DRI/I/0-6mo", "NASEM_DRI", "any", 0, ip(6), "none", ""},
 	}
 	v := func(ls, n, vt, basis string, lo, hi *float64, unit, applies string) ReferenceValue {
 		return ReferenceValue{"NASEM_DRI", "consolidated-2019", ls, n, vt, basis, lo, hi, unit, applies}
@@ -41,6 +41,10 @@ func resolverCatalog(t *testing.T) *Catalog {
 		v(p, "protein", "RDA", BasisPerDay, f(71), nil, "g", "total_intake"),
 		v(p, "vit_c", "RDA", BasisPerDay, f(85), nil, "mg", "total_intake"),
 		v("NASEM_DRI/I/0-6mo", "vit_c", "AI", BasisPerDay, f(40), nil, "mg", "total_intake"),
+	}
+	c.Roles = []ValueTypeRole{
+		{"NASEM_DRI", "RDA", "recommended"}, {"NASEM_DRI", "AI", "recommended"}, {"NASEM_DRI", "EAR", "none"},
+		{"NASEM_DRI", "UL", "upper_limit"}, {"NASEM_DRI", "AMDR", "target"}, {"NASEM_DRI", "CDRR", "target"}, {"NASEM_DRI", "DG", "target"},
 	}
 	c.EnergyEquations = []EnergyEquation{
 		{"NASEM_DRI", "2023-energy", "NASEM_DRI/M/19+y", "inactive", 753.07, -10.83, 6.50, 14.10, 0},

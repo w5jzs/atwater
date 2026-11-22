@@ -34,6 +34,7 @@ const (
 	WarnNoLifeStageGroup      = "no_life_stage_group"
 	WarnUnresolvedNutrient    = "unresolved_nutrient"
 	WarnRemainderInfeasible   = "energy_remainder_infeasible"
+	WarnUnknownValueType      = "unknown_value_type"
 )
 
 // General Atwater factors, kcal/g, for converting energy-based targets (D9).
@@ -52,6 +53,7 @@ type Inputs struct {
 	BodyMass      []Reading // body_mass readings; the resolver picks the window
 	Plan          *Plan
 	Overrides     []Override // all of the user's overrides; the resolver filters by date
+	Guidelines    []Guideline
 }
 
 type Person struct {
@@ -60,6 +62,14 @@ type Person struct {
 	HeightCM           *float64 // usr.account.height_cm
 	ActivityLevel      string   // usr.account.activity_level; "" = unknown
 	PhysiologicalState string   // none | pregnant | lactating on Date
+	DueDate            string   // pregnancy due date, YYYY-MM-DD; picks trimester groups (design 0002 A2)
+}
+
+// Guideline is a supplementary guideline the user opted into
+// (usr.account.guideline_codes), with the edition to use (design 0002 A5).
+type Guideline struct {
+	Authority string
+	Edition   string
 }
 
 type Reading struct {
@@ -122,6 +132,7 @@ type ResolvedInputs struct {
 	BodyMass        *BodyMassInputs `json:"body_mass,omitempty"`
 	Plan            *PlanInputs     `json:"plan,omitempty"`
 	Overrides       []OverrideRef   `json:"overrides,omitempty"`
+	Guidelines      []GuidelineRef  `json:"guidelines,omitempty"`
 	Config          ConfigInputs    `json:"config"`
 }
 
@@ -149,6 +160,12 @@ type BodyMassInputs struct {
 type PlanInputs struct {
 	VersionID          string `json:"version_id"`
 	RulesSchemaVersion int    `json:"rules_schema_version"`
+}
+
+type GuidelineRef struct {
+	Authority string `json:"authority"`
+	Edition   string `json:"edition"`
+	LifeStage string `json:"life_stage"`
 }
 
 type OverrideRef struct {
@@ -181,6 +198,14 @@ type resolver struct {
 	ranges   map[string]span
 	upper    map[string]float64
 	rec      map[string]float64 // authority RDA/AI per day, for below_recommended
+	stage    string             // gestation stage, "" unless pregnant with a due date
+}
+
+// valueSource is one authority's values for the person's group: the primary
+// authority, or an opted-in guideline (design 0002 A5).
+type valueSource struct {
+	authority, edition, group string
+	primary                   bool
 }
 
 func (r *resolver) warn(code, nutrient string, detail map[string]any) {
@@ -236,10 +261,22 @@ func Resolve(in Inputs, cat *Catalog) (*Result, error) {
 	if err := r.bodyMass(); err != nil {
 		return nil, err
 	}
+	if r.stage, err = r.trimester(); err != nil {
+		return nil, err
+	}
 	r.resolveEnergy(ageMonths, overrides)
-	group := r.driGroup(ageMonths)
-	if group != "" {
-		r.authorityLayer(group)
+	var sources []valueSource
+	if group := r.driGroup(ageMonths); group != "" {
+		sources = append(sources, valueSource{in.Authority, in.DRIEdition, group, true})
+	}
+	for _, gl := range in.Guidelines {
+		if g := r.guidelineGroup(ageMonths, gl); g != "" {
+			sources = append(sources, valueSource{gl.Authority, gl.Edition, g, false})
+			r.res.Inputs.Guidelines = append(r.res.Inputs.Guidelines, GuidelineRef{gl.Authority, gl.Edition, g})
+		}
+	}
+	if err := r.authorityLayer(sources); err != nil {
+		return nil, err
 	}
 	if in.Plan != nil {
 		r.planLayer()
@@ -369,44 +406,92 @@ func (r *resolver) bodyMass() error {
 
 // findGroup picks the one life-stage group of the authority matching the
 // person, among groups that `has` accepts. Sex-specific groups win over 'any'.
-func (r *resolver) findGroup(ageMonths int, state string, has func(code string) bool) (string, error) {
+// trimester derives the gestation stage from the due date (design 0002 A2):
+// gestational age is 280 days minus the days until the due date; under 14
+// weeks is the first trimester, 14 to under 28 the second, then the third.
+func (r *resolver) trimester() (string, error) {
+	p := r.in.Person
+	if p.PhysiologicalState != "pregnant" || p.DueDate == "" {
+		return "", nil
+	}
+	due, err := time.Parse(dayLayout, p.DueDate)
+	if err != nil {
+		return "", fmt.Errorf("due date: %w", err)
+	}
+	gestDays := 280 - int(due.Sub(r.day).Hours()/24)
+	switch {
+	case gestDays < 14*7:
+		return "trimester_1", nil
+	case gestDays < 28*7:
+		return "trimester_2", nil
+	default:
+		return "trimester_3", nil
+	}
+}
+
+// findGroup picks the one life-stage group of an authority matching the
+// person, among groups that `has` accepts. Sex-specific groups win over
+// 'any'; for pregnancy, the trimester's group wins over one with no stage.
+func (r *resolver) findGroup(authority string, ageMonths int, state, stage string, has func(code string) bool) (string, error) {
 	if ageMonths < 0 {
 		return "", nil
 	}
-	for _, sex := range []string{r.in.Person.ReferenceSex, "any"} {
-		var hits []string
-		for _, g := range r.cat.LifeStages {
-			if g.Authority != r.in.Authority || g.Sex != sex || g.PhysiologicalState != state || !has(g.Code) {
-				continue
+	stages := []string{""}
+	if stage != "" {
+		stages = []string{stage, ""}
+	}
+	for _, st := range stages {
+		for _, sex := range []string{r.in.Person.ReferenceSex, "any"} {
+			var hits []string
+			for _, g := range r.cat.LifeStages {
+				if g.Authority != authority || g.Sex != sex || g.PhysiologicalState != state || g.GestationStage != st || !has(g.Code) {
+					continue
+				}
+				if ageMonths >= g.AgeMinMonths && (g.AgeMaxMonths == nil || ageMonths < *g.AgeMaxMonths) {
+					hits = append(hits, g.Code)
+				}
 			}
-			if ageMonths >= g.AgeMinMonths && (g.AgeMaxMonths == nil || ageMonths < *g.AgeMaxMonths) {
-				hits = append(hits, g.Code)
+			if len(hits) > 1 {
+				sort.Strings(hits)
+				return "", fmt.Errorf("catalog: %d life-stage groups match (%v)", len(hits), hits)
 			}
-		}
-		if len(hits) > 1 {
-			sort.Strings(hits)
-			return "", fmt.Errorf("catalog: %d life-stage groups match (%v)", len(hits), hits)
-		}
-		if len(hits) == 1 {
-			return hits[0], nil
+			if len(hits) == 1 {
+				return hits[0], nil
+			}
 		}
 	}
 	return "", nil
 }
 
-func (r *resolver) driGroup(ageMonths int) string {
+func (r *resolver) groupsWithValues(authority, edition string) map[string]bool {
 	has := map[string]bool{}
 	for _, v := range r.cat.Values {
-		if v.Authority == r.in.Authority && v.Edition == r.in.DRIEdition {
+		if v.Authority == authority && v.Edition == edition {
 			has[v.LifeStage] = true
 		}
 	}
-	g, err := r.findGroup(ageMonths, r.in.Person.PhysiologicalState, func(c string) bool { return has[c] })
+	return has
+}
+
+func (r *resolver) guidelineGroup(ageMonths int, gl Guideline) string {
+	has := r.groupsWithValues(gl.Authority, gl.Edition)
+	g, _ := r.findGroup(gl.Authority, ageMonths, r.in.Person.PhysiologicalState, r.stage, func(c string) bool { return has[c] })
+	// A guideline with nothing for this person's group simply doesn't apply;
+	// that isn't a problem worth a warning.
+	return g
+}
+
+func (r *resolver) driGroup(ageMonths int) string {
+	has := r.groupsWithValues(r.in.Authority, r.in.DRIEdition)
+	g, err := r.findGroup(r.in.Authority, ageMonths, r.in.Person.PhysiologicalState, r.stage, func(c string) bool { return has[c] })
 	if err == nil && g != "" {
 		r.res.Inputs.LifeStage = g
 		return g
 	}
 	detail := map[string]any{}
+	if r.in.Person.PhysiologicalState == "pregnant" && r.in.Person.DueDate == "" {
+		detail["missing_due_date"] = true
+	}
 	if err != nil {
 		detail["error"] = err.Error()
 	}
@@ -510,7 +595,7 @@ func (r *resolver) estimate(ageMonths int, ei *EnergyInputs, needed bool) *float
 	}
 	// Equations are for the person's actual state; pregnancy and lactation
 	// equations aren't loaded, so those states get no estimate.
-	g, err := r.findGroup(ageMonths, p.PhysiologicalState, func(c string) bool { return has[c] })
+	g, err := r.findGroup(r.in.Authority, ageMonths, p.PhysiologicalState, r.stage, func(c string) bool { return has[c] })
 	if err != nil || g == "" {
 		return miss("an energy equation for this life stage")
 	}
@@ -553,10 +638,19 @@ func (r *resolver) toPerDay(nutrient, basis string, amount float64, perKg *float
 	return 0, false
 }
 
-// authorityLayer: RDA/AI (per kg when a body mass is known, else per day) and
-// AMDR lows give the low; AMDR, CDRR and DG highs give the high; the highest
-// low and lowest high win. A total-intake UL is the upper limit (D2).
-func (r *resolver) authorityLayer(group string) {
+// authorityLayer folds the primary authority's values, and any opted-in
+// guideline's, into one range per nutrient, by each value type's role
+// (design 0002 A1). 'recommended' values (per kg when a body mass is known,
+// else per day) are floors; 'target' values are floors and ceilings as
+// stored; the highest floor and lowest ceiling win (0001 D2). Upper limits
+// come only from the primary authority's total-intake values.
+func (r *resolver) authorityLayer(sources []valueSource) error {
+	roles := map[string]string{}
+	hasRoles := map[string]bool{}
+	for _, vr := range r.cat.Roles {
+		roles[vr.Authority+"|"+vr.ValueType] = vr.Role
+		hasRoles[vr.Authority] = true
+	}
 	type acc struct {
 		lows, highs      []float64
 		recPerKg, recDay *float64
@@ -568,47 +662,58 @@ func (r *resolver) authorityLayer(group string) {
 		}
 		return by[n]
 	}
-	for _, v := range r.cat.Values {
-		if v.Authority != r.in.Authority || v.Edition != r.in.DRIEdition || v.LifeStage != group {
-			continue
+	unknown := map[string]bool{}
+	for _, src := range sources {
+		// No roles at all for an authority is a catalog-load bug, not a
+		// person's missing data: fail loudly rather than resolve nothing.
+		if !hasRoles[src.authority] {
+			return fmt.Errorf("catalog: no value-type roles for authority %s", src.authority)
 		}
-		if _, ok := r.cat.nutrient(v.Nutrient); !ok {
-			continue
-		}
-		a := get(v.Nutrient)
-		switch v.ValueType {
-		case "RDA", "AI":
-			if v.Low == nil {
+		for _, v := range r.cat.Values {
+			if v.Authority != src.authority || v.Edition != src.edition || v.LifeStage != src.group {
 				continue
 			}
+			if _, ok := r.cat.nutrient(v.Nutrient); !ok {
+				continue
+			}
+			role, ok := roles[v.Authority+"|"+v.ValueType]
+			if !ok {
+				if !unknown[v.Authority+"|"+v.ValueType] {
+					unknown[v.Authority+"|"+v.ValueType] = true
+					r.warn(WarnUnknownValueType, "", map[string]any{"authority": v.Authority, "value_type": v.ValueType})
+				}
+				continue
+			}
+			a := get(v.Nutrient)
 			// Per-kg values follow the plan's body-mass basis, like plan targets (D5).
-			if amt, ok := r.toPerDay(v.Nutrient, v.Basis, *v.Low, r.perKgKG); ok {
-				if v.Basis == BasisPerKg {
-					a.recPerKg = &amt
-				} else if v.Basis == BasisPerDay {
-					a.recDay = &amt
+			conv := func(p *float64) (float64, bool) { return r.toPerDay(v.Nutrient, v.Basis, *p, r.perKgKG) }
+			switch role {
+			case "recommended":
+				if v.Low == nil {
+					continue
 				}
-			}
-		case "AMDR":
-			if v.Low != nil {
-				if amt, ok := r.toPerDay(v.Nutrient, v.Basis, *v.Low, r.measured); ok {
-					a.lows = append(a.lows, amt)
+				if amt, ok := conv(v.Low); ok {
+					if v.Basis == BasisPerKg {
+						a.recPerKg = &amt
+					} else if v.Basis == BasisPerDay {
+						a.recDay = &amt
+					}
 				}
-			}
-			if v.High != nil {
-				if amt, ok := r.toPerDay(v.Nutrient, v.Basis, *v.High, r.measured); ok {
-					a.highs = append(a.highs, amt)
+			case "target":
+				if v.Low != nil {
+					if amt, ok := conv(v.Low); ok {
+						a.lows = append(a.lows, amt)
+					}
 				}
-			}
-		case "CDRR", "DG":
-			if v.High != nil {
-				if amt, ok := r.toPerDay(v.Nutrient, v.Basis, *v.High, r.measured); ok {
-					a.highs = append(a.highs, amt)
+				if v.High != nil {
+					if amt, ok := conv(v.High); ok {
+						a.highs = append(a.highs, amt)
+					}
 				}
-			}
-		case "UL":
-			if v.AppliesTo == "total_intake" && v.Basis == BasisPerDay && v.High != nil {
-				r.upper[v.Nutrient] = *v.High
+			case "upper_limit":
+				if src.primary && v.AppliesTo == "total_intake" && v.Basis == BasisPerDay && v.High != nil {
+					r.upper[v.Nutrient] = *v.High
+				}
 			}
 		}
 	}
@@ -637,6 +742,7 @@ func (r *resolver) authorityLayer(group string) {
 			r.ranges[n] = s
 		}
 	}
+	return nil
 }
 
 func (r *resolver) planLayer() {
