@@ -97,6 +97,22 @@ SELECT t.check('DRI spot values: pregnancy 31-50 zinc RDA 11 mg, men 19-30 coppe
   AND (SELECT amount_high FROM ref.nutrient_reference_value r JOIN ref.nutrient n USING (nutrient_id)
     WHERE r.life_stage_code = 'NASEM_DRI/M/19-30y' AND n.code = 'copper' AND r.value_type = 'UL') = 10);
 
+-- value-type roles and gestation stages (0008, seed 0005)
+SELECT t.check('every NASEM value type in use has a role',
+  NOT EXISTS (SELECT DISTINCT value_type FROM ref.nutrient_reference_value r
+               WHERE r.authority_code = 'NASEM_DRI'
+                 AND NOT EXISTS (SELECT 1 FROM ref.value_type_role vr
+                                  WHERE vr.authority_code = r.authority_code AND vr.value_type = r.value_type)));
+SELECT t.expect_error('unknown roles rejected',
+  $$INSERT INTO ref.value_type_role (authority_code, value_type, role) VALUES ('EFSA', 'XX', 'floor')$$, '23514');
+SELECT t.expect_error('gestation stage only on pregnant groups',
+  $$INSERT INTO ref.life_stage_group (life_stage_code, authority_code, sex, age_min_months, label, gestation_stage)
+    VALUES ('SMOKE/x', 'EFSA', 'female', 216, 'x', 'trimester_2')$$, '23514');
+INSERT INTO ref.life_stage_group (life_stage_code, authority_code, sex, age_min_months, physiological_state, label, gestation_stage)
+  VALUES ('SMOKE/P/T2', 'EFSA', 'female', 216, 'pregnant', 'Smoke pregnancy T2', 'trimester_2');
+SELECT t.check('trimester groups can be stored',
+  (SELECT gestation_stage FROM ref.life_stage_group WHERE life_stage_code = 'SMOKE/P/T2') = 'trimester_2');
+
 -- grants lint: 0005 granted on the tables that existed then, so every later
 -- table needs its own grants. Catch a table someone forgot.
 SELECT t.check('every ref table is readable by catalog_ro and catalog_admin',
