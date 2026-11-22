@@ -1,0 +1,175 @@
+{
+ "SRLegacyFoods": [
+  {
+   "fdcId": 173410,
+   "ndbNumber": 1001,
+   "dataType": "SR Legacy",
+   "description": "Butter, salted",
+   "foodCategory": {
+    "id": 1,
+    "code": "0100",
+    "description": "Dairy and Egg Products"
+   },
+   "foodNutrients": [
+    {
+     "type": "FoodNutrient",
+     "amount": 717,
+     "nutrient": {
+      "id": 5979,
+      "number": "208",
+      "name": "Energy",
+      "rank": 1,
+      "unitName": "KCAL"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 2999,
+     "nutrient": {
+      "id": 5431,
+      "number": "268",
+      "name": "Energy",
+      "rank": 1,
+      "unitName": "kJ"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 81.11,
+     "nutrient": {
+      "id": 5406,
+      "number": "204",
+      "name": "Total lipid (fat)",
+      "rank": 1,
+      "unitName": "G"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 0.06,
+     "nutrient": {
+      "id": 7334,
+      "number": "269",
+      "name": "Sugars, total including NLEA",
+      "rank": 1,
+      "unitName": "G"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 643,
+     "nutrient": {
+      "id": 6323,
+      "number": "307",
+      "name": "Sodium, Na",
+      "rank": 1,
+      "unitName": "MG"
+     }
+    }
+   ],
+   "foodPortions": [
+    {
+     "id": 1,
+     "sequenceNumber": 1,
+     "amount": 1,
+     "gramWeight": 5,
+     "modifier": "pat (1\" sq, 1/3\" high)",
+     "measureUnit": {
+      "id": 1,
+      "name": "undetermined",
+      "abbreviation": "undetermined"
+     }
+    },
+    {
+     "id": 2,
+     "sequenceNumber": 2,
+     "amount": 1,
+     "gramWeight": 227,
+     "modifier": "cup",
+     "measureUnit": {
+      "id": 1,
+      "name": "undetermined",
+      "abbreviation": "undetermined"
+     }
+    },
+    {
+     "id": 3,
+     "sequenceNumber": 3,
+     "amount": 1,
+     "gramWeight": 14.2,
+     "modifier": "tbsp",
+     "measureUnit": {
+      "id": 1,
+      "name": "undetermined",
+      "abbreviation": "undetermined"
+     }
+    }
+   ],
+   "nutrientConversionFactors": [
+    {
+     "type": ".CalorieConversionFactor",
+     "proteinValue": 4.27,
+     "fatValue": 8.79,
+     "carbohydrateValue": 3.87
+    }
+   ]
+  },
+  {
+   "fdcId": 171413,
+   "ndbNumber": 4053,
+   "dataType": "SR Legacy",
+   "description": "Oil, olive, salad or cooking",
+   "foodCategory": {
+    "id": 4,
+    "code": "0400",
+    "description": "Fats and Oils"
+   },
+   "foodNutrients": [
+    {
+     "type": "FoodNutrient",
+     "amount": 884,
+     "nutrient": {
+      "id": 5979,
+      "number": "208",
+      "name": "Energy",
+      "rank": 1,
+      "unitName": "KCAL"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 100,
+     "nutrient": {
+      "id": 5406,
+      "number": "204",
+      "name": "Total lipid (fat)",
+      "rank": 1,
+      "unitName": "G"
+     }
+    }
+   ],
+   "foodPortions": [
+    {
+     "id": 1,
+     "sequenceNumber": 1,
+     "amount": 1,
+     "gramWeight": 13.5,
+     "modifier": "tbsp",
+     "measureUnit": {
+      "id": 1,
+      "name": "undetermined",
+      "abbreviation": "undetermined"
+     }
+    }
+   ],
+   "nutrientConversionFactors": [
+    {
+     "type": ".CalorieConversionFactor",
+     "proteinValue": 4,
+     "fatValue": 9,
+     "carbohydrateValue": 4
+    }
+   ]
+  }
+ ]
+}

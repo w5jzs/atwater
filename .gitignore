@@ -1,0 +1,23 @@
+# Go build output
+/importers/fdc/fdc-import
+*.test
+*.out
+
+# Local-only module overrides
+go.local.mod
+go.local.sum
+
+# Secrets and local env (connection strings come from the secrets manager)
+.env
+.env.*
+*.pem
+*.key
+
+# Downloaded FoodData Central files (large; fetch from fdc.nal.usda.gov)
+FoodData_Central_*.zip
+FoodData_Central_*.json
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

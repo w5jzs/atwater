@@ -1,0 +1,252 @@
+{
+ "FoundationFoods": [
+  {
+   "foodClass": "FinalFood",
+   "fdcId": 321358,
+   "ndbNumber": "16158",
+   "dataType": "Foundation",
+   "description": "Hummus, commercial",
+   "publicationDate": "2025-12-18",
+   "foodCategory": {
+    "id": 16,
+    "code": "1600",
+    "description": "Legumes and Legume Products"
+   },
+   "foodNutrients": [
+    {
+     "type": "FoodNutrient",
+     "amount": 160,
+     "nutrient": {
+      "id": 8640,
+      "number": "957",
+      "name": "Energy (Atwater General Factors)",
+      "rank": 1,
+      "unitName": "KCAL"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 166,
+     "nutrient": {
+      "id": 1008,
+      "number": "958",
+      "name": "Energy (Atwater Specific Factors)",
+      "rank": 1,
+      "unitName": "KCAL"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 7.35,
+     "nutrient": {
+      "id": 1191,
+      "number": "203",
+      "name": "Protein",
+      "rank": 1,
+      "unitName": "G"
+     },
+     "foodNutrientDerivation": {
+      "code": "A",
+      "description": "Analytical"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 17.1,
+     "nutrient": {
+      "id": 5406,
+      "number": "204",
+      "name": "Total lipid (fat)",
+      "rank": 1,
+      "unitName": "G"
+     },
+     "foodNutrientDerivation": {
+      "code": "A",
+      "description": "Analytical"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 14.9,
+     "nutrient": {
+      "id": 4262,
+      "number": "205",
+      "name": "Carbohydrate, by difference",
+      "rank": 1,
+      "unitName": "G"
+     },
+     "foodNutrientDerivation": {
+      "code": "A",
+      "description": "Calculated"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 5.4,
+     "nutrient": {
+      "id": 4778,
+      "number": "291",
+      "name": "Fiber, total dietary",
+      "rank": 1,
+      "unitName": "G"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 0.34,
+     "nutrient": {
+      "id": 3649,
+      "number": "269.3",
+      "name": "Sugars, Total",
+      "rank": 1,
+      "unitName": "G"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 426,
+     "nutrient": {
+      "id": 6323,
+      "number": "307",
+      "name": "Sodium, Na",
+      "rank": 1,
+      "unitName": "MG"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 0.08,
+     "nutrient": {
+      "id": 4739,
+      "number": "511",
+      "name": "Tryptophan",
+      "rank": 1,
+      "unitName": "G"
+     }
+    }
+   ],
+   "foodPortions": [
+    {
+     "id": 1,
+     "sequenceNumber": 1,
+     "amount": 1,
+     "gramWeight": 15,
+     "modifier": "",
+     "measureUnit": {
+      "id": 1,
+      "name": "tbsp",
+      "abbreviation": "tbsp"
+     }
+    },
+    {
+     "id": 2,
+     "sequenceNumber": 2,
+     "amount": 1,
+     "gramWeight": 246,
+     "modifier": "",
+     "measureUnit": {
+      "id": 1,
+      "name": "cup",
+      "abbreviation": "cup"
+     }
+    },
+    {
+     "id": 3,
+     "sequenceNumber": 3,
+     "amount": 1,
+     "gramWeight": 0,
+     "modifier": "",
+     "measureUnit": {
+      "id": 1,
+      "name": "undetermined",
+      "abbreviation": "undetermined"
+     }
+    }
+   ],
+   "nutrientConversionFactors": [
+    {
+     "type": ".ProteinConversionFactor",
+     "value": 6.25
+    },
+    {
+     "type": ".CalorieConversionFactor",
+     "proteinValue": 3.47,
+     "fatValue": 8.37,
+     "carbohydrateValue": 4.07
+    }
+   ]
+  },
+  {
+   "foodClass": "FinalFood",
+   "fdcId": 748967,
+   "dataType": "Foundation",
+   "description": "Eggs, Grade A, Large, egg whole",
+   "foodCategory": {
+    "id": 1,
+    "code": "0100",
+    "description": "Dairy and Egg Products"
+   },
+   "foodNutrients": [
+    {
+     "type": "FoodNutrient",
+     "amount": 12.4,
+     "nutrient": {
+      "id": 1191,
+      "number": "203",
+      "name": "Protein",
+      "rank": 1,
+      "unitName": "G"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 0.198,
+     "nutrient": {
+      "id": 9186,
+      "number": "305",
+      "name": "Phosphorus, P",
+      "rank": 1,
+      "unitName": "G"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 5,
+     "nutrient": {
+      "id": 7587,
+      "number": "301",
+      "name": "Iron, Fe",
+      "rank": 1,
+      "unitName": "IU"
+     }
+    },
+    {
+     "type": "FoodNutrient",
+     "amount": 180,
+     "nutrient": {
+      "id": 4373,
+      "number": "320",
+      "name": "Vitamin A, RAE",
+      "rank": 1,
+      "unitName": "UG"
+     }
+    }
+   ],
+   "foodPortions": [
+    {
+     "id": 1,
+     "sequenceNumber": 1,
+     "amount": 1,
+     "gramWeight": 50,
+     "modifier": "large",
+     "measureUnit": {
+      "id": 1,
+      "name": "undetermined",
+      "abbreviation": "undetermined"
+     }
+    }
+   ],
+   "nutrientConversionFactors": []
+  }
+ ]
+}
