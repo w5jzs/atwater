@@ -97,6 +97,8 @@ Four layers, lowest to highest: **authority → plan → user override → clini
   | UL, `applies_to = supplements_only` | Not used against food totals; kept in the inputs for a future supplements view |
   | EAR | Not used. It's for assessing groups, not setting an individual's target |
 
+- **Within the authority layer, a nutrient can have several values.** Carbohydrate has an RDA of 130 g and an AMDR of 45–65% of energy. The target low is the highest of the applicable lows (RDA or AI, AMDR low), and the target high is the lowest of the applicable highs (AMDR high, CDRR, DG). For a man eating 3,211 kcal, protein comes out at 84 g (0.8 g/kg × 105 kg) to 281 g (35%).
+
 - **`upper_limit` always comes from the authority and no layer changes it.** It's a safety ceiling, not a preference. Keeping it separate from `target_high` is why `daily_target` has both columns.
 
 ### D3. Targets far from recommended values
@@ -116,7 +118,7 @@ A user or clinician can set any target, including above the upper limit (for exa
 Energy has no reference value row, so the plan's `energy.method` decides it:
 
 - **`eer`:** the NASEM 2023 Estimated Energy Requirement equations, using sex, age, height, body mass and a physical-activity category, plus the assignment's `energy_adjust_kcal`. NASEM already supplies the other reference values, so this keeps one source.
-- **`fixed`:** the plan states `kcal`, e.g. for clinician-prescribed diets.
+- **`fixed`:** the plan states `kcal`, e.g. for clinician-prescribed diets. The assignment's `energy_adjust_kcal` applies to `eer` only; a fixed plan's kcal is absolute.
 - **v2, `adaptive`:** estimate expenditure from logged intake and the weight trend once there are 2–3 weeks of data, falling back to `eer` before that. It's the most accurate method for weight loss. It's committed for v2 and needs its own design. v1 already leaves room: it's one more `method` value.
 
 Three rules apply whichever method is used:
@@ -166,7 +168,7 @@ Inputs are serialized as canonical JSON (RFC 8785) before hashing, so the same i
 Two more pieces of provenance:
 
 - **Resolver version is an input.** When the algorithm changes, new resolutions get new hashes and old rows stay as they were. No migration rewrites history.
-- **Warnings are stored**, in a new `target_resolution.warnings jsonb` column (`exceeds_upper_limit`, `below_recommended`, `energy_far_from_estimate`, `stale_body_mass`, `no_life_stage_group`, `unresolved_nutrient`), so the app can explain a missing or odd target and know when to show the disclaimer. *Schema change.*
+- **Warnings are stored**, in a new `target_resolution.warnings jsonb` column (`exceeds_upper_limit`, `below_recommended`, `energy_far_from_estimate`, `stale_body_mass`, `no_life_stage_group`, `unresolved_nutrient`, `energy_remainder_infeasible`), so the app can explain a missing or odd target and know when to show the disclaimer. *Schema change.*
 
 ### D9. Conversions to stored units
 
@@ -175,7 +177,8 @@ Two more pieces of provenance:
 - **`pct_energy` → grams:** uses the general Atwater factors (protein 4, carbohydrate 4, fat 9, alcohol 7 kcal/g) against the day's energy target. That's a convention for targets. It's separate from how a food's own energy was measured, which stays stored as published.
 - **`per_1000_kcal`:** multiplied by energy target / 1000.
 - **`per_kg_body_weight`:** multiplied by the body mass from D5.
-- **`energy_remainder`:** the energy target minus the other two macros, divided by the remainder macro's factor. Bounds invert: the remainder's high comes from the other macros' lows, and its low from their highs.
+- **`energy_remainder`:** the energy target minus the other two macros, divided by the remainder macro's factor. Bounds invert: the remainder's high comes from the other macros' lows, and its low from their highs. If the other macros already use the whole budget, the remainder is left out with `energy_remainder_infeasible`.
+- **A target that can't be converted is left out, not inherited.** For example, a plan's per-kg target with no weight on record, or a percent-of-energy target with no energy target. The layer below doesn't fill in, because that would show a number from a source the user didn't pick. The row is omitted and `unresolved_nutrient` says why.
 
 ## Worked example
 

@@ -6,8 +6,6 @@ import (
 	"testing"
 )
 
-func f(v float64) *float64 { return &v }
-
 // testCatalog is a small, real slice of the catalog: nutrient codes and
 // canonical units match catalog/seed/0001.
 func testCatalog(t *testing.T) *Catalog {
