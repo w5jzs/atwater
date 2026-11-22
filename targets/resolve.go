@@ -103,9 +103,11 @@ type Warning struct {
 }
 
 type Result struct {
-	Targets  []Target
-	Warnings []Warning
-	Inputs   ResolvedInputs // provenance (D8)
+	Targets    []Target
+	Warnings   []Warning
+	Inputs     ResolvedInputs // provenance (D8)
+	InputsJSON []byte         // canonical; usr.target_resolution.inputs
+	InputsHash [32]byte       // sha256 of InputsJSON; usr.target_resolution.inputs_hash
 }
 
 // ResolvedInputs is what the resolver actually used: the content of
@@ -251,6 +253,9 @@ func Resolve(in Inputs, cat *Catalog) (*Result, error) {
 	}
 	r.remainder()
 	r.finish()
+	if r.res.InputsJSON, r.res.InputsHash, err = HashInputs(r.res.Inputs); err != nil {
+		return nil, err
+	}
 	return r.res, nil
 }
 

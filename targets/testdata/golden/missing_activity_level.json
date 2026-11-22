@@ -1,0 +1,96 @@
+{
+  "targets": [
+    {
+      "nutrient_id": 2,
+      "nutrient": "protein",
+      "target_low": 129.6,
+      "source": "plan"
+    },
+    {
+      "nutrient_id": 201,
+      "nutrient": "vit_c",
+      "target_low": 90,
+      "upper_limit": 2000,
+      "source": "authority"
+    },
+    {
+      "nutrient_id": 202,
+      "nutrient": "vit_d",
+      "target_low": 15,
+      "upper_limit": 100,
+      "source": "authority"
+    },
+    {
+      "nutrient_id": 305,
+      "nutrient": "sodium",
+      "target_high": 2300,
+      "source": "plan"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "unresolved_nutrient",
+      "nutrient": "carbohydrate",
+      "detail": {
+        "reason": "energy_remainder needs an energy target"
+      }
+    },
+    {
+      "code": "unresolved_nutrient",
+      "nutrient": "energy",
+      "detail": {
+        "reason": "estimate needs activity_level"
+      }
+    },
+    {
+      "code": "unresolved_nutrient",
+      "nutrient": "energy",
+      "detail": {
+        "reason": "no energy estimate"
+      }
+    },
+    {
+      "code": "unresolved_nutrient",
+      "nutrient": "fat",
+      "detail": {
+        "reason": "can't convert pct_energy",
+        "source": "plan"
+      }
+    },
+    {
+      "code": "unresolved_nutrient",
+      "nutrient": "fiber",
+      "detail": {
+        "reason": "can't convert per_1000_kcal",
+        "source": "plan"
+      }
+    }
+  ],
+  "inputs": {
+    "authority": "NASEM_DRI",
+    "body_mass": {
+      "basis": "reference_bmi",
+      "measured_kg": 105,
+      "reference_bmi": 25,
+      "reference_kg": 81
+    },
+    "config": {
+      "body_mass_step_kg": 0.5,
+      "energy_warn_fraction": 0.25,
+      "stale_days": 90,
+      "trend_days": 7
+    },
+    "dri_edition": "consolidated-2019",
+    "energy": {
+      "edition": "2023-energy",
+      "method": "eer"
+    },
+    "life_stage": "NASEM_DRI/M/31-50y",
+    "plan": {
+      "rules_schema_version": 1,
+      "version_id": "plan-d1"
+    },
+    "resolver_version": 1
+  },
+  "inputs_sha256": "c0cfca3f2599d510c9aa6825eaddc361cb6a19e13f31bea516be5386c46b59d9"
+}

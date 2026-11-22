@@ -1,0 +1,53 @@
+{
+  "targets": [
+    {
+      "nutrient_id": 2,
+      "nutrient": "protein",
+      "target_low": 71,
+      "source": "authority"
+    },
+    {
+      "nutrient_id": 201,
+      "nutrient": "vit_c",
+      "target_low": 85,
+      "source": "authority"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "unresolved_nutrient",
+      "nutrient": "energy",
+      "detail": {
+        "reason": "estimate needs an energy equation for this life stage"
+      }
+    },
+    {
+      "code": "unresolved_nutrient",
+      "nutrient": "energy",
+      "detail": {
+        "reason": "no energy estimate"
+      }
+    }
+  ],
+  "inputs": {
+    "authority": "NASEM_DRI",
+    "body_mass": {
+      "basis": "measured",
+      "measured_kg": 70
+    },
+    "config": {
+      "body_mass_step_kg": 0.5,
+      "energy_warn_fraction": 0.25,
+      "stale_days": 90,
+      "trend_days": 7
+    },
+    "dri_edition": "consolidated-2019",
+    "energy": {
+      "edition": "2023-energy",
+      "method": "eer"
+    },
+    "life_stage": "NASEM_DRI/P/31-50y",
+    "resolver_version": 1
+  },
+  "inputs_sha256": "12049b3ed0ec6c91220ea1d196ca99e5488fd559120e1f3e457b743537835a92"
+}

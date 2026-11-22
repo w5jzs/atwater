@@ -1,0 +1,136 @@
+{
+  "targets": [
+    {
+      "nutrient_id": 1,
+      "nutrient": "energy",
+      "target_low": 1800,
+      "target_high": 1800,
+      "source": "user"
+    },
+    {
+      "nutrient_id": 2,
+      "nutrient": "protein",
+      "target_low": 129.6,
+      "source": "plan"
+    },
+    {
+      "nutrient_id": 3,
+      "nutrient": "fat",
+      "target_low": 50,
+      "target_high": 70,
+      "source": "plan"
+    },
+    {
+      "nutrient_id": 4,
+      "nutrient": "carbohydrate",
+      "target_high": 207.9,
+      "source": "plan_remainder"
+    },
+    {
+      "nutrient_id": 5,
+      "nutrient": "fiber",
+      "target_low": 25.2,
+      "source": "plan"
+    },
+    {
+      "nutrient_id": 201,
+      "nutrient": "vit_c",
+      "target_low": 60,
+      "upper_limit": 2000,
+      "source": "user"
+    },
+    {
+      "nutrient_id": 202,
+      "nutrient": "vit_d",
+      "target_low": 125,
+      "upper_limit": 100,
+      "source": "clinician"
+    },
+    {
+      "nutrient_id": 305,
+      "nutrient": "sodium",
+      "target_high": 2300,
+      "source": "plan"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "below_recommended",
+      "nutrient": "fiber",
+      "detail": {
+        "recommended": 38
+      }
+    },
+    {
+      "code": "below_recommended",
+      "nutrient": "vit_c",
+      "detail": {
+        "recommended": 90
+      }
+    },
+    {
+      "code": "energy_far_from_estimate",
+      "nutrient": "energy",
+      "detail": {
+        "estimate_kcal": 3210.97,
+        "target_kcal": 1800
+      }
+    },
+    {
+      "code": "exceeds_upper_limit",
+      "nutrient": "vit_d",
+      "detail": {
+        "upper_limit": 100
+      }
+    }
+  ],
+  "inputs": {
+    "authority": "NASEM_DRI",
+    "body_mass": {
+      "basis": "reference_bmi",
+      "measured_kg": 105,
+      "reference_bmi": 25,
+      "reference_kg": 81
+    },
+    "config": {
+      "body_mass_step_kg": 0.5,
+      "energy_warn_fraction": 0.25,
+      "stale_days": 90,
+      "trend_days": 7
+    },
+    "dri_edition": "consolidated-2019",
+    "energy": {
+      "activity_level": "low_active",
+      "adjust_kcal": -500,
+      "age_years": 40,
+      "edition": "2023-energy",
+      "estimate_kcal": 3210.97,
+      "height_cm": 180,
+      "life_stage": "NASEM_DRI/M/19+y",
+      "method": "eer",
+      "override_id": "o-kcal",
+      "target_kcal": 1800
+    },
+    "life_stage": "NASEM_DRI/M/31-50y",
+    "overrides": [
+      {
+        "id": "o-kcal",
+        "version": 2
+      },
+      {
+        "id": "o-vitc",
+        "version": 1
+      },
+      {
+        "id": "o-vitd",
+        "version": 3
+      }
+    ],
+    "plan": {
+      "rules_schema_version": 1,
+      "version_id": "plan-d1"
+    },
+    "resolver_version": 1
+  },
+  "inputs_sha256": "6e7f45c38fb3cf53acaa64dd5be2233bc313a8df41421697806223e62abf9817"
+}

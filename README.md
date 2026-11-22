@@ -43,6 +43,7 @@ The tenant cluster is the source of truth for user data, and the catalog is the 
 | `test/run.sh` | Local/CI: rebuilds both databases from scratch through `bootstrap.sh --reset` |
 | `importers/fdc/` | Go importer for USDA FoodData Central (Foundation, SR Legacy); see its README |
 | `importers/dri/` | Go generator: NASEM DRI transcriptions → seed 0004. `go run .` regenerates; `go test` fails if the committed seed is stale |
+| `targets/` | Go target resolver (design 0001): `ParseRules` validates plan rules against the embedded JSON Schema, `Resolve` computes a day's targets and warnings with no I/O, `HashInputs` gives the canonical inputs and hash for `target_resolution`. Golden outputs in `testdata/golden` |
 
 ## Referencing the catalog without foreign keys
 
