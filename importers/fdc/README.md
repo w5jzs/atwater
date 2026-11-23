@@ -106,4 +106,4 @@ For a local Unix socket, use the query form (`postgres://user@/db?host=/tmp&port
 
 ## Verified against real FDC files
 
-Imported on llm: Foundation 2026-10-29 (424 foods) and SR Legacy 2018-04 (7,793). Dry run of Branded 2026-10-29: 434,001 read, 5,420 skipped for their serving unit. Unmapped nutrients are reported on every run; on Branded the largest are Vitamin A and Vitamin D in IU (no catalog nutrient takes IU).
+Imported on llm (2026-11-23): Foundation 2026-10-29 (424 foods), SR Legacy 2018-04 (7,793) and Branded 2026-10-29 (434,001 read; 428,581 imported, 5,420 skipped for their serving unit; 417,871 barcodes; 3,017 impossible values dropped; 8 min 19 s at --batch 1000). The catalog is 1.27 GB after Branded. Unmapped nutrients are reported on every run; on Branded the largest are Vitamin A and Vitamin D in IU (no catalog nutrient takes IU).

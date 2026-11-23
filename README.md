@@ -47,7 +47,7 @@ The tenant cluster is the source of truth for user data, and the catalog is the 
 | `bootstrap/preflight.sql` | Read-only checks run inside each database |
 | `test/*_smoke_test.sql` | Smoke tests; each runs in one transaction and rolls back |
 | `test/run.sh` | Local/CI: rebuilds both databases from scratch through `bootstrap.sh --reset` |
-| `importers/fdc/` | Go importer for USDA FoodData Central (Foundation, SR Legacy); see its README |
+| `importers/fdc/` | Go importer for USDA FoodData Central (Foundation, SR Legacy, Branded); see its README |
 | `importers/dri/` | Go generator: NASEM DRI transcriptions → seed 0004. `go run .` regenerates; `go test` fails if the committed seed is stale |
 | `targets/` | Go target resolver (design 0001): `ParseRules` validates plan rules against the embedded JSON Schema, `Resolve` computes a day's targets and warnings with no I/O, `HashInputs` gives the canonical inputs and hash for `target_resolution`. Golden outputs in `testdata/golden` |
 
@@ -167,7 +167,8 @@ The smoke tests switch into these roles, so the bootstrap user needs SET members
 ## Open items
 
 - Diet-plan `rules` JSON Schema (v1) and the target-resolution algorithm.
-- FoodData Central importer: built and tested on fixtures; dry-run against the real Foundation and SR Legacy files before the first import.
+- FDC Branded foods sold by volume (55,829 in 2026-10-29) are stored per 100 mL with no density, but `usr.food_log_entry.grams` is required, so they can't be logged yet. Needs a decision: log volume, or take density from somewhere.
+- FDC nutrients reported only in IU aren't imported: vitamin D in IU on 115k Branded foods converts exactly (0.025 µg per IU) and could be mapped; vitamin A in IU can't be converted to RAE.
 - Catalog import jobs: Open Food Facts (keep ODbL data isolated), Compendium 2024, LOINC, other authorities, and the IEEE 1752 (`ieee` namespace) schema mappings.
 - Verify the seeded Open mHealth value paths against the published schema versions.
 - The nightly reconciliation job (orphaned catalog references).

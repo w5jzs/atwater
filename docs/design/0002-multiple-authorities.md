@@ -86,4 +86,4 @@ Settled 2026-11-22:
 | 2 | DGA protein 1.2–1.6 g/kg/day | Loaded for adults 19+. For users who opt in, it raises the adult floor from 0.8 to 1.2 g/kg (126–168 g at 105 kg) |
 | 3 | Added sugars | Ceiling of 0 g/day at every age, so any amount logged is over the target |
 
-Note on added sugars: FDC Foundation and SR Legacy don't report added sugars at all (nutrient 539: 0 of the 8,217 foods imported on 2026-11-22), so foods from those datasets add nothing to the daily added-sugar total. The ceiling only bites on foods that carry added-sugar data, such as custom foods, recipes and, once imported, branded foods (FDC Branded reports it from the label).
+Note on added sugars: FDC Foundation and SR Legacy don't report added sugars at all (nutrient 539: 0 of their 8,217 foods), so foods from those datasets add nothing to the daily added-sugar total. FDC Branded reports it from the label for 139,641 of the 428,581 foods imported on 2026-11-23; the ceiling bites on those, and on custom foods and recipes that carry it. A branded food without the value adds nothing, so a day's total is a floor, not a measurement.
