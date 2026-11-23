@@ -23,6 +23,7 @@ The tenant cluster is the source of truth for user data, and the catalog is the 
 | `catalog/migrations/0006_import_support.sql` | `ref.food_identity` (stable food identity across releases) and `ref.import_run` (import log) |
 | `catalog/migrations/0007_ref_energy_equation.sql` | `ref.energy_equation`, coefficients for Estimated Energy Requirement equations (design 0001); no rows yet |
 | `catalog/migrations/0008_ref_value_roles_gestation.sql` | `ref.value_type_role` (what each authority's value types do) and trimester-specific life-stage groups (design 0002) |
+| `catalog/migrations/0009_ref_food_barcode_gtin14.sql` | `ref.food_barcode` stores GTIN-14 (zero-padded, valid check digit) via `ref.gtin14_ok()` |
 | `catalog/seed/0001_ref_seed.sql` | Units, 7 authorities, 35 nutrients, NASEM adult 31-50 values, 17 metrics, 6 lab analytes, tags, 11 Open mHealth and 11 GATT mappings |
 | `catalog/seed/0002_ref_nutrients_mn_b5_choline_folate.sql` | Manganese, pantothenic acid, choline and total folate, with NASEM adult 31-50 values; added after the first FDC dry run |
 | `catalog/seed/0003_ref_energy_eer_nasem_2023.sql` | NASEM 2023 adult EER equations (men and women 19+, four activity levels), from the report's Table S-3 |

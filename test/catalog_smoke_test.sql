@@ -137,6 +137,23 @@ SELECT t.check('DGA covers every age for added sugars, sat fat from 2, protein f
                    JOIN ref.nutrient n USING (nutrient_id)
                    WHERE r.authority_code = 'US_DGA' AND n.code = 'sat_fat' AND g.age_min_months < 24 AND g.physiological_state = 'none'));
 
+-- barcodes are GTIN-14 with a valid check digit (0009)
+SELECT t.check('GTIN-14 check digits',
+  ref.gtin14_ok('00036000291452') AND NOT ref.gtin14_ok('00036000291453')
+  AND NOT ref.gtin14_ok('036000291452') AND NOT ref.gtin14_ok('00000000000000'));
+SET ROLE catalog_admin;
+INSERT INTO ref.food_barcode (gtin, food_version_id)
+  SELECT '00036000291452', food_version_id FROM ref.food_version WHERE source_key = 'smoke-egg';
+SELECT t.check('a padded UPC-A is stored',
+  (SELECT count(*) FROM ref.food_barcode WHERE gtin = lpad('036000291452', 14, '0')) = 1);
+SELECT t.expect_error('unpadded barcodes rejected',
+  $$INSERT INTO ref.food_barcode (gtin, food_version_id)
+    SELECT '036000291452', food_version_id FROM ref.food_version WHERE source_key = 'smoke-egg'$$, '23514');
+SELECT t.expect_error('bad check digit rejected',
+  $$INSERT INTO ref.food_barcode (gtin, food_version_id)
+    SELECT '00036000291453', food_version_id FROM ref.food_version WHERE source_key = 'smoke-egg'$$, '23514');
+RESET ROLE;
+
 -- grants lint: 0005 granted on the tables that existed then, so every later
 -- table needs its own grants. Catch a table someone forgot.
 SELECT t.check('every ref table is readable by catalog_ro and catalog_admin',
