@@ -108,19 +108,19 @@ func TestMapPortions(t *testing.T) {
 }
 
 func TestIdentityKey(t *testing.T) {
-	if k := identityKey(food(t, `{"fdcId":1,"ndbNumber":1001}`)); k != "ndb:1001" {
+	if k := identityKey(food(t, `{"fdcId":1,"ndbNumber":1001}`), ""); k != "ndb:1001" {
 		t.Error(k)
 	}
-	if k := identityKey(food(t, `{"fdcId":7,"ndbNumber":"16158"}`)); k != "ndb:16158" {
+	if k := identityKey(food(t, `{"fdcId":7,"ndbNumber":"16158"}`), ""); k != "ndb:16158" {
 		t.Error(k)
 	}
-	if k := identityKey(food(t, `{"fdcId":748967}`)); k != "fdc:748967" {
+	if k := identityKey(food(t, `{"fdcId":748967}`), ""); k != "fdc:748967" {
 		t.Error(k)
 	}
 }
 
 func TestStreamRejectsUnsupported(t *testing.T) {
-	if _, err := openFoodStream(strings.NewReader(`{"BrandedFoods":[]}`)); err == nil ||
+	if _, err := openFoodStream(strings.NewReader(`{"SurveyFoods":[]}`)); err == nil ||
 		!strings.Contains(err.Error(), "not supported") {
 		t.Errorf("want not-supported error, got %v", err)
 	}

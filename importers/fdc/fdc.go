@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// FDC full-download JSON shapes (Foundation and SR Legacy). Only the fields
+// FDC full-download JSON shapes (Foundation, SR Legacy and Branded). Only the fields
 // the importer uses are declared; everything else is ignored. Numeric-ish
 // identifiers are decoded leniently because FDC is not consistent about
 // quoting them across datasets and releases.
@@ -22,6 +22,15 @@ type fdcFood struct {
 	FoodNutrients   []fdcFoodNutrient
 	FoodPortions    []fdcPortion
 	ConvFactors     []fdcConvFactor `json:"nutrientConversionFactors"`
+
+	// Branded only.
+	BrandOwner       string   `json:"brandOwner"`
+	BrandName        string   `json:"brandName"`
+	GtinUpc          string   `json:"gtinUpc"`
+	ServingSize      *float64 `json:"servingSize"`
+	ServingSizeUnit  string   `json:"servingSizeUnit"`
+	HouseholdServing string   `json:"householdServingFullText"`
+	BrandedCategory  string   `json:"brandedFoodCategory"`
 }
 
 type fdcCategory struct {
@@ -92,6 +101,7 @@ func (s *lenientStr) UnmarshalJSON(b []byte) error {
 var supportedRoots = map[string]string{
 	"FoundationFoods": "FDC_FOUNDATION",
 	"SRLegacyFoods":   "FDC_SR_LEGACY",
+	"BrandedFoods":    "FDC_BRANDED",
 }
 
 // foodStream walks {"<Root>": [ food, food, ... ]} one food at a time, so a
@@ -126,10 +136,10 @@ func openFoodStream(r io.Reader) (*foodStream, error) {
 			return nil, err
 		}
 		if strings.HasSuffix(key, "Foods") {
-			return nil, fmt.Errorf("dataset %q is not supported yet (supported: FoundationFoods, SRLegacyFoods)", key)
+			return nil, fmt.Errorf("dataset %q is not supported yet (supported: FoundationFoods, SRLegacyFoods, BrandedFoods)", key)
 		}
 	}
-	return nil, fmt.Errorf("no FoundationFoods or SRLegacyFoods array found; is this an FDC full-download JSON file?")
+	return nil, fmt.Errorf("no FoundationFoods, SRLegacyFoods or BrandedFoods array found; is this an FDC full-download JSON file?")
 }
 
 // Next returns the next food, or (nil, io.EOF) at the end of the array.

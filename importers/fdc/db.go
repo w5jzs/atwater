@@ -135,44 +135,29 @@ func (im *importer) importFood(ctx context.Context, tx pgx.Tx, f *fdcFood) error
 		return nil
 	}
 
-	// Stable food identity across releases.
-	key := identityKey(f)
-	var foodID string
-	err := tx.QueryRow(ctx, `SELECT food_id::text FROM ref.food_identity WHERE source_family = $1 AND identity_key = $2`,
-		im.datasetCode, key).Scan(&foodID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		if err := tx.QueryRow(ctx, `INSERT INTO ref.food (canonical_name) VALUES ($1) RETURNING food_id::text`,
-			f.Description).Scan(&foodID); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO ref.food_identity (source_family, identity_key, food_id) VALUES ($1, $2, $3)`,
-			im.datasetCode, key, foodID); err != nil {
-			return err
-		}
-		im.stats.NewFoodIdentities++
-	} else if err != nil {
+	p, skip := im.meta.planFood(f, im.datasetCode, im.stats)
+	if skip != "" {
+		im.stats.FoodsSkipped[skip]++
+		return nil
+	}
+	im.stats.countPlan(p)
+
+	foodID, err := im.resolveIdentity(ctx, tx, f, p)
+	if err != nil {
 		return err
 	}
 
 	// Food category -> food group.
 	var gScheme, gCode *string
-	if code, name, ok := categoryCode(f.FoodCategory); ok {
-		if !im.groups[code] {
+	if g := p.Group; g != nil {
+		if k := g.Scheme + "/" + g.Code; !im.groups[k] {
 			if _, err := tx.Exec(ctx, `INSERT INTO ref.food_group (scheme, group_code, name) VALUES ($1, $2, $3)
-			                           ON CONFLICT DO NOTHING`, foodGroupScheme, code, name); err != nil {
+			                           ON CONFLICT DO NOTHING`, g.Scheme, g.Code, g.Name); err != nil {
 				return err
 			}
-			im.groups[code] = true
+			im.groups[k] = true
 		}
-		s := foodGroupScheme
-		gScheme, gCode = &s, &code
-	}
-
-	energy := pickEnergy(f)
-	im.stats.EnergyMethods[energy.Method]++
-	kind := "foundation"
-	if im.datasetCode == "FDC_SR_LEGACY" {
-		kind = "generic"
+		gScheme, gCode = &g.Scheme, &g.Code
 	}
 
 	// A version from a newer release of the same dataset may already be
@@ -186,14 +171,15 @@ func (im *importer) importFood(ctx context.Context, tx pgx.Tx, f *fdcFood) error
 		return err
 	}
 
+	energy := p.Energy
 	var versionID string
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO ref.food_version (food_id, dataset_id, source_key, name, food_kind, nutrient_basis,
+		INSERT INTO ref.food_version (food_id, dataset_id, source_key, name, brand, food_kind, nutrient_basis,
 		                              energy_method, protein_kcal_per_g, fat_kcal_per_g, carb_kcal_per_g,
 		                              group_scheme, group_code, is_current, superseded_by)
-		VALUES ($1, $2, $3, $4, $5, 'per_100g', $6, $7, $8, $9, $10, $11, $12, $13)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING food_version_id::text`,
-		foodID, im.datasetID, sourceKey, f.Description, kind, energy.Method,
+		foodID, im.datasetID, sourceKey, f.Description, p.Brand, p.Kind, p.Basis, energy.Method,
 		energy.Protein, energy.Fat, energy.Carb, gScheme, gCode,
 		newerCurrent == nil, newerCurrent).Scan(&versionID); err != nil {
 		return err
@@ -220,10 +206,8 @@ func (im *importer) importFood(ctx context.Context, tx pgx.Tx, f *fdcFood) error
 	if energy.Kcal != nil {
 		rows = append(rows, []any{versionID, im.meta.nutrientsByFDC[fdcEnergyKcal].ID, round6(*energy.Kcal), nil})
 		energyRows = 1
-	} else {
-		im.stats.FoodsWithoutEnergy++
 	}
-	for _, n := range im.meta.mapNutrients(f, im.stats) {
+	for _, n := range p.Nutrients {
 		rows = append(rows, []any{versionID, n.NutrientID, n.Amount, n.Derivation})
 	}
 	if len(rows) > 0 {
@@ -243,17 +227,73 @@ func (im *importer) importFood(ctx context.Context, tx pgx.Tx, f *fdcFood) error
 		return err
 	}
 
+	if p.GTIN != "" {
+		if _, err := tx.Exec(ctx, `INSERT INTO ref.food_barcode (gtin, food_version_id) VALUES ($1, $2)`,
+			p.GTIN, versionID); err != nil {
+			return err
+		}
+	}
+
 	// Household portions; the first in FDC's sequence is the default.
-	for i, p := range mapPortions(f, im.stats) {
+	for i, pt := range p.Portions {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO ref.food_portion (food_version_id, label, amount, unit_code, gram_weight, is_default, sort_order)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			versionID, p.Label, p.Amount, p.UnitCode, p.GramWeight, i == 0, i); err != nil {
+			versionID, pt.Label, pt.Amount, pt.UnitCode, pt.GramWeight, i == 0, i); err != nil {
 			return err
 		}
 		im.stats.PortionRows++
 	}
 	return nil
+}
+
+// resolveIdentity finds or creates the stable food behind this version.
+// The first key already holding a version in this release (two FDC entries
+// with one GTIN) would make the second supersede the first inside the same
+// release, so that food falls back to an identity keyed on its fdcId.
+func (im *importer) resolveIdentity(ctx context.Context, tx pgx.Tx, f *fdcFood, p *foodPlan) (string, error) {
+	keys := []string{identityKey(f, p.GTIN)}
+	if fallback := "fdc:" + strconv.Itoa(f.FdcID); keys[0] != fallback {
+		keys = append(keys, fallback)
+	}
+	for i, key := range keys {
+		var foodID string
+		err := tx.QueryRow(ctx, `SELECT food_id::text FROM ref.food_identity WHERE source_family = $1 AND identity_key = $2`,
+			im.datasetCode, key).Scan(&foodID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			if err := tx.QueryRow(ctx, `INSERT INTO ref.food (canonical_name) VALUES ($1) RETURNING food_id::text`,
+				f.Description).Scan(&foodID); err != nil {
+				return "", err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO ref.food_identity (source_family, identity_key, food_id) VALUES ($1, $2, $3)`,
+				im.datasetCode, key, foodID); err != nil {
+				return "", err
+			}
+			im.stats.NewFoodIdentities++
+			if i > 0 {
+				im.stats.IdentityFallbacks++
+			}
+			return foodID, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		var taken bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM ref.food_version WHERE food_id = $1 AND dataset_id = $2)`,
+			foodID, im.datasetID).Scan(&taken); err != nil {
+			return "", err
+		}
+		if !taken || i == len(keys)-1 {
+			if taken {
+				return "", fmt.Errorf("identity %s already has a version in this release", key)
+			}
+			if i > 0 {
+				im.stats.IdentityFallbacks++
+			}
+			return foodID, nil
+		}
+	}
+	panic("unreachable")
 }
 
 func startRun(ctx context.Context, conn *pgx.Conn, datasetID int16, file string, sum []byte) (string, error) {

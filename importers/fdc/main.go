@@ -1,5 +1,5 @@
-// fdc-import loads a USDA FoodData Central full download (Foundation or
-// SR Legacy, JSON or the .zip it ships in) into the Atwater catalog.
+// fdc-import loads a USDA FoodData Central full download (Foundation,
+// SR Legacy or Branded; JSON or the .zip it ships in) into the Atwater catalog.
 //
 //	CATALOG_DATABASE_URL=postgres://... fdc-import --file FoodData_Central_foundation_food_json_2025-12-18.zip
 //
@@ -115,13 +115,13 @@ func run() error {
 				return fmt.Errorf("after %d foods: %w", st.FoodsRead, err)
 			}
 			st.FoodsRead++
-			e := pickEnergy(f)
-			st.EnergyMethods[e.Method]++
-			if e.Kcal == nil {
-				st.FoodsWithoutEnergy++
+			if p, skip := meta.planFood(f, stream.DatasetCode, st); skip != "" {
+				st.FoodsSkipped[skip]++
+			} else {
+				st.countPlan(p)
+				st.NutrientRows += len(p.Nutrients)
+				st.PortionRows += len(p.Portions)
 			}
-			st.NutrientRows += len(meta.mapNutrients(f, st))
-			st.PortionRows += len(mapPortions(f, st))
 			if *limit > 0 && st.FoodsRead >= *limit {
 				break
 			}
@@ -131,7 +131,8 @@ func run() error {
 	}
 
 	name := map[string]string{"FDC_FOUNDATION": "USDA FoodData Central — Foundation Foods",
-		"FDC_SR_LEGACY": "USDA FoodData Central — SR Legacy"}[stream.DatasetCode]
+		"FDC_SR_LEGACY": "USDA FoodData Central — SR Legacy",
+		"FDC_BRANDED":   "USDA FoodData Central — Branded Foods"}[stream.DatasetCode]
 	datasetID, created, err := ensureDataset(ctx, conn, stream.DatasetCode, *release, name)
 	if err != nil {
 		return fmt.Errorf("dataset row: %w", err)
@@ -293,7 +294,19 @@ func report(st *importStats, took time.Duration, dry bool) {
 	}
 	fmt.Printf("  nutrient rows         %d (excluding energy)\n", st.NutrientRows)
 	fmt.Printf("  portion rows          %d (skipped %d without grams or a label)\n", st.PortionRows, st.SkippedPortions)
+	if n := sumValues(st.FoodsSkipped); n > 0 {
+		fmt.Printf("  foods skipped         %d: %s\n", n, topN(st.FoodsSkipped, 10))
+	}
 	fmt.Printf("  foods without energy  %d\n", st.FoodsWithoutEnergy)
+	if st.Barcodes+st.BarcodesInvalid > 0 {
+		fmt.Printf("  barcodes (GTIN-14)    %d (skipped %d invalid)\n", st.Barcodes, st.BarcodesInvalid)
+	}
+	if st.FoodsPer100mL > 0 {
+		fmt.Printf("  foods per 100 mL      %d (no gram portion: serving is a volume)\n", st.FoodsPer100mL)
+	}
+	if st.IdentityFallbacks > 0 {
+		fmt.Printf("  identity fallbacks    %d (GTIN already used in this release; keyed on fdcId)\n", st.IdentityFallbacks)
+	}
 	fmt.Printf("  energy methods        %s\n", topN(st.EnergyMethods, 10))
 	if len(st.UnitMismatches) > 0 {
 		fmt.Printf("  unit mismatches       %s\n", topN(st.UnitMismatches, 10))
@@ -302,6 +315,13 @@ func report(st *importStats, took time.Duration, dry bool) {
 		fmt.Printf("  unmapped nutrients    %d distinct; most common: %s\n", len(st.UnmappedNutrients), topN(st.UnmappedNutrients, 8))
 		fmt.Println("                        (add them to ref.nutrient to import them)")
 	}
+}
+
+func sumValues(m map[string]int) (n int) {
+	for _, v := range m {
+		n += v
+	}
+	return n
 }
 
 func topN(m map[string]int, n int) string {

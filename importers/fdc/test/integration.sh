@@ -36,7 +36,7 @@ nut() { echo "(SELECT fn.amount::float8 FROM ref.food_nutrient fn JOIN ref.nutri
              WHERE fn.food_version_id = (SELECT food_version_id FROM ref.food_version WHERE source_key = '$1') AND n.code = '$2')"; }
 
 echo "-- input validation"
-imp_fails --file "$DATA/branded_unsupported.json" --release x
+imp_fails --file "$DATA/survey_unsupported.json" --release x
 out_has "unsupported dataset rejected" "not supported yet"
 imp_fails --file "$DATA/foundation_r1.json"
 out_has "--release required for a real import" "release is required"
@@ -145,5 +145,62 @@ check "dataset created under the file name's date" 2 \
   "SELECT count(*) FROM $V WHERE d.code = 'FDC_FOUNDATION' AND d.release_label = '2025-12-18'"
 check "only the two accepted runs were logged" $((runs_before + 2)) "SELECT count(*) FROM ref.import_run"
 rm -f "$DATED"
+
+echo "-- Branded release 1"
+BV="$V WHERE d.code = 'FDC_BRANDED'"
+bc() { echo "(SELECT string_agg(gtin, ',' ORDER BY gtin) FROM ref.food_barcode
+               WHERE food_version_id = (SELECT food_version_id FROM ref.food_version WHERE source_key = '$1'))"; }
+imp --file "$DATA/branded_r1.json" --dry-run
+dry_rows="$(sed -nE 's/^ +nutrient rows +([0-9]+).*/\1/p' /tmp/fdc_import.out)"
+out_has "dry run counts the MG-serving food as skipped" 'foods skipped +1: serving unit "MG"'
+out_has "dry run counts barcodes" 'barcodes \(GTIN-14\) +4 \(skipped 1 invalid\)'
+imp --file "$DATA/branded_r1.json" --release 2026-10
+out_has "import reports the dry run's nutrient rows" "nutrient rows +$dry_rows \(excluding energy\)"
+out_has "import reports the volume-basis food" "foods per 100 mL +1"
+out_has "import reports the identity fallback" "identity fallbacks +1"
+check "five branded versions (MG serving skipped)" 5 "SELECT count(*) FROM $BV"
+check "skipped food left no trace" 0 "SELECT count(*) FROM ref.food_version WHERE source_key = '3000003'"
+check "kind, brand (owner when no brand name), basis, label energy" "branded|MICHELE'S|per_100g|label|500" \
+  "SELECT food_kind||'|'||brand||'|'||nutrient_basis||'|'||energy_method||'|'||$(nut 3000001 energy) FROM ref.food_version WHERE source_key = '3000001'"
+check "label derivations stored as label, missing ones as NULL" "label|label|" \
+  "SELECT (SELECT derivation FROM ref.food_nutrient fn JOIN ref.nutrient n USING (nutrient_id) JOIN ref.food_version v USING (food_version_id)
+            WHERE v.source_key = '3000001' AND n.code = 'protein')||'|'||
+          (SELECT derivation FROM ref.food_nutrient fn JOIN ref.nutrient n USING (nutrient_id) JOIN ref.food_version v USING (food_version_id)
+            WHERE v.source_key = '3000001' AND n.code = 'added_sugars')||'|'||
+          coalesce((SELECT derivation FROM ref.food_nutrient fn JOIN ref.nutrient n USING (nutrient_id) JOIN ref.food_version v USING (food_version_id)
+            WHERE v.source_key = '3000006' AND n.code = 'protein'), '')"
+check "added sugars imported" 21.4 "SELECT $(nut 3000001 added_sugars)"
+check "label serving became the default portion" "1 serving (0.25 cup)|28.000|true" \
+  "SELECT label||'|'||gram_weight||'|'||is_default FROM ref.food_portion
+    WHERE food_version_id = (SELECT food_version_id FROM ref.food_version WHERE source_key = '3000001')"
+check "volume food: per 100 mL, no gram portion" "per_100ml|LIFEWAY|0" \
+  "SELECT nutrient_basis||'|'||brand||'|'||(SELECT count(*) FROM ref.food_portion p WHERE p.food_version_id = v.food_version_id)
+     FROM ref.food_version v WHERE source_key = '3000002'"
+check "UPC-A stored as GTIN-14" 00036000291452 "SELECT $(bc 3000001)"
+check "EAN-13 stored as GTIN-14" 04006381333931 "SELECT $(bc 3000002)"
+check "a code missing its check digit stores no barcode" "" "SELECT $(bc 3000006)"
+check "identity: GTIN, or fdcId without a valid barcode or when the GTIN is taken in the release" \
+  "fdc:3000005;fdc:3000006;gtin:00012345678905;gtin:00036000291452;gtin:04006381333931" \
+  "SELECT string_agg(identity_key, ';' ORDER BY identity_key) FROM ref.food_identity WHERE source_family = 'FDC_BRANDED'"
+check "both listings of one GTIN keep its barcode, both current" "00012345678905|00012345678905|2" \
+  "SELECT $(bc 3000004)||'|'||$(bc 3000005)||'|'||(SELECT count(*) FROM ref.food_version WHERE source_key IN ('3000004','3000005') AND is_current)"
+check "branded categories in their own scheme" "Cereal" \
+  "SELECT g.name FROM ref.food_version v JOIN ref.food_group g ON (g.scheme, g.group_code) = (v.group_scheme, v.group_code)
+    WHERE v.source_key = '3000001' AND g.scheme = 'FDC_BRANDED_CATEGORY'"
+
+echo "-- Branded release 2: new fdcIds, same products"
+imp --file "$DATA/branded_r2.json" --release 2027-04
+check "granola found by GTIN despite the dropped leading zero" "false|true|480" \
+  "SELECT o.is_current||'|'||(o.superseded_by = n.food_version_id)||'|'||$(nut 3100001 energy)
+     FROM ref.food_version o, ref.food_version n WHERE o.source_key = '3000001' AND n.source_key = '3100001'"
+check "kefir superseded too; brand name preferred over owner" "false|MICHELE'S" \
+  "SELECT (SELECT is_current FROM ref.food_version WHERE source_key = '3000002')||'|'||
+          (SELECT brand FROM ref.food_version WHERE source_key = '3100001')"
+check "old and new versions both answer the barcode" 2 \
+  "SELECT count(*) FROM ref.food_barcode WHERE gtin = '00036000291452'"
+check "products absent from release 2 stay current" 3 \
+  "SELECT count(*) FROM ref.food_version WHERE source_key IN ('3000004','3000005','3000006') AND is_current"
+check "exactly one current version per food, all datasets" 0 \
+  "SELECT count(*) FROM (SELECT food_id FROM ref.food_version WHERE is_current GROUP BY food_id HAVING count(*) > 1) x"
 
 echo "ALL $pass FDC IMPORTER CHECKS PASSED"

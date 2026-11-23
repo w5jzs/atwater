@@ -1,6 +1,10 @@
+| Food category | `ref.food_group`, scheme `FDC_CATEGORY`; Branded's `brandedFoodCategory` uses scheme `FDC_BRANDED_CATEGORY` |
+| Branded: brand name (brand owner when blank) | `ref.food_version.brand` |
+| Branded: `gtinUpc` | `ref.food_barcode`, as GTIN-14; also the food's identity across releases |
+| Branded: label serving | One portion, `1 serving (<household text>)`, when the serving is in grams |
 # fdc-import — USDA FoodData Central → Atwater catalog
 
-Loads an FDC full download into the catalog cluster. Supported datasets are **Foundation Foods** and **SR Legacy**; Branded and Survey (FNDDS) are rejected with a clear message for now.
+Loads an FDC full download into the catalog cluster. Supported datasets are **Foundation Foods**, **SR Legacy** and **Branded Foods**; Survey (FNDDS) is rejected with a clear message for now.
 
 ## Build
 
@@ -69,6 +73,8 @@ GRANT catalog_admin TO <importer_user> WITH INHERIT FALSE, SET TRUE;
 - **Units convert within a dimension** (g ↔ mg ↔ µg). Values that can't convert, such as IU into µg, are skipped and reported as unit mismatches.
 - **Idempotent and resumable.** Each batch commits on its own. Foods already present for the dataset release are skipped, so an interrupted run continues by running it again.
 - **One file per release label.** Resuming is refused if any earlier run for that release (failed runs included) read a file with a different SHA-256. Otherwise a different download under the same label would silently keep the first file's foods, and the append-only catalog can't delete them. A different download gets its own label automatically, since FDC file names carry the release date.
+- **Branded foods are keyed on their barcode.** FDC gives an updated product a new fdcId, so a valid GTIN (zero-padded to 14 digits, check digit valid) is the identity, and the next release supersedes the old version. Codes that fail the check (about 10.7k in 2026-10-29, mostly UPCs missing their check digit) store no barcode and fall back to the fdcId. Two listings with one GTIN in the same release: the second falls back to its fdcId too, so neither supersedes the other.
+- **Branded nutrients are per 100 of the serving unit**: `g` gives `per_100g`, `ml` gives `per_100ml`. A volume serving has no gram weight, so those foods get no portion. About 5.4k foods give `MG`, `IU` or `MC` as the serving unit while their numbers behave like grams or millilitres; they are skipped and reported, not guessed. Energy and nutrient derivations are `label`.
 - **New releases supersede, history stays.** Importing a newer release adds new versions under the same food, marks the old versions not current, and points them at their replacement. Logged meals keep referencing the version they were logged against. A food missing from a newer release stays current.
 
 ## Example report (dry run on the test fixture)
@@ -89,7 +95,7 @@ dry run (nothing written) finished in 0s
 ## Tests
 
 - `go test ./...`: unit tests for energy selection, nutrient and unit mapping, portions, identity keys and stream parsing.
-- `test/integration.sh`: rebuilds scratch databases with `bootstrap.sh --reset` and runs the binary against `testdata/` fixtures. It checks dry run, release 1, an idempotent rerun, SR Legacy, an interrupted-then-resumed release 2 zip that supersedes release 1, a refused resume from a different file, and release labels taken from (or checked against) the file name. 51 checks, passing on PostgreSQL 18.7.
+- `test/integration.sh`: rebuilds scratch databases with `bootstrap.sh --reset` and runs the binary against `testdata/` fixtures. It checks dry run, release 1, an idempotent rerun, SR Legacy, an interrupted-then-resumed release 2 zip that supersedes release 1, a refused resume from a different file, and release labels taken from (or checked against) the file name. It also imports two Branded releases: serving units, barcodes, identity by GTIN across a dropped leading zero, and the in-release GTIN fallback. 74 checks, passing on PostgreSQL 18.7.
 
 ```bash
 CATALOG_DATABASE_URL=... TENANT_DATABASE_URL=... FDC_IMPORT=./importers/fdc/fdc-import ./importers/fdc/test/integration.sh
@@ -97,11 +103,6 @@ CATALOG_DATABASE_URL=... TENANT_DATABASE_URL=... FDC_IMPORT=./importers/fdc/fdc-
 
 For a local Unix socket, use the query form (`postgres://user@/db?host=/tmp&port=5433`); pgx rejects a percent-encoded socket path.
 
-## Not yet verified against real FDC files
+## Verified against real FDC files
 
-The fixtures follow FDC's published JSON layout, but the real downloads couldn't be fetched while this was built. Run `--dry-run` on the actual Foundation and SR Legacy files first and check that:
-
-- foods read matches the dataset size;
-- the energy-method split looks plausible and few foods lack energy;
-- no unexpected unit mismatches appear;
-- the unmapped list holds only nutrients we haven't chosen to track (amino acids, individual fatty acids and so on).
+Imported on llm: Foundation 2026-10-29 (424 foods) and SR Legacy 2018-04 (7,793). Dry run of Branded 2026-10-29: 434,001 read, 5,420 skipped for their serving unit. Unmapped nutrients are reported on every run; on Branded the largest are Vitamin A and Vitamin D in IU (no catalog nutrient takes IU).

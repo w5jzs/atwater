@@ -82,6 +82,11 @@ type importStats struct {
 	UnmappedNutrients  map[string]int `json:"unmapped_nutrients"`
 	UnitMismatches     map[string]int `json:"unit_mismatches"`
 	SkippedPortions    int            `json:"skipped_portions"`
+	IdentityFallbacks  int            `json:"identity_fallbacks,omitempty"`
+	FoodsSkipped       map[string]int `json:"foods_skipped,omitempty"`
+	Barcodes           int            `json:"barcodes"`
+	BarcodesInvalid    int            `json:"barcodes_invalid"`
+	FoodsPer100mL      int            `json:"foods_per_100ml"`
 }
 
 func newStats() *importStats {
@@ -89,6 +94,7 @@ func newStats() *importStats {
 		EnergyMethods:     map[string]int{},
 		UnmappedNutrients: map[string]int{},
 		UnitMismatches:    map[string]int{},
+		FoodsSkipped:      map[string]int{},
 	}
 }
 
@@ -201,6 +207,13 @@ func derivation(fn fdcFoodNutrient) *string {
 	if fn.Derivation == nil {
 		return nil
 	}
+	// Branded label codes (LCCS "Calculated from value per serving size
+	// measure", LCCD from a %DV, LCGA "given ... per 100 unit") all come off
+	// the label, whatever the description says about calculating.
+	if strings.HasPrefix(strings.ToUpper(fn.Derivation.Code), "LC") {
+		v := "label"
+		return &v
+	}
 	d := strings.ToLower(fn.Derivation.Description)
 	var v string
 	switch {
@@ -275,9 +288,13 @@ func mapPortions(f *fdcFood, st *importStats) []mappedPortion {
 	return out
 }
 
-// identityKey is the release-stable key for a food: the NDB number when
-// FDC provides one, otherwise the fdcId.
-func identityKey(f *fdcFood) string {
+// identityKey is the release-stable key for a food: the GTIN for a branded
+// food with a valid barcode (FDC gives an updated product a new fdcId), the
+// NDB number when FDC provides one, otherwise the fdcId.
+func identityKey(f *fdcFood, gtin string) string {
+	if gtin != "" {
+		return "gtin:" + gtin
+	}
 	if n := strings.TrimSpace(string(f.NdbNumber)); n != "" && n != "0" {
 		return "ndb:" + n
 	}
@@ -295,5 +312,5 @@ func categoryCode(c *fdcCategory) (code, name string, ok bool) {
 	if s := strings.TrimSpace(string(c.Code)); s != "" {
 		return s, name, true
 	}
-	return strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(name), "-"), "-"), name, true
+	return slug(name), name, true
 }
