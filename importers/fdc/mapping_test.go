@@ -65,7 +65,7 @@ func TestMapNutrients(t *testing.T) {
 	  {"nutrient":{"number":"305","name":"Phosphorus","unitName":"MG"}}]}`)
 	st := newStats()
 	got := map[int16]float64{}
-	for _, n := range m.mapNutrients(f, st) {
+	for _, n := range m.mapNutrients(f, st, "per_100g") {
 		got[n.NutrientID] = n.Amount
 	}
 	if got[6] != 0.34 {

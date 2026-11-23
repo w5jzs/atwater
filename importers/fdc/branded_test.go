@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strconv"
+	"testing"
+)
 
 func TestNormalizeGTIN(t *testing.T) {
 	cases := map[string]string{ // raw -> GTIN-14, "" = rejected
@@ -92,3 +95,36 @@ func TestPlanKeepsFoundationBehaviour(t *testing.T) {
 		t.Errorf("SR Legacy plan = %+v", p)
 	}
 }
+
+func TestImplausibleValuesDropped(t *testing.T) {
+	m := brandedMeta()
+	m.nutrientsByFDC["307"] = nutrientInfo{8, "mg"}
+	m.units["mg"] = unitInfo{"mass", ptr(0.001)}
+	js := func(unit string, kcal, protein, sodium float64) string {
+		return `{"fdcId":9,"servingSize":28,"servingSizeUnit":"` + unit + `","foodNutrients":[
+		  {"amount":` + ftoa(kcal) + `,"nutrient":{"number":"208","name":"Energy","unitName":"kcal"}},
+		  {"amount":` + ftoa(protein) + `,"nutrient":{"number":"203","name":"Protein","unitName":"g"}},
+		  {"amount":` + ftoa(sodium) + `,"nutrient":{"number":"307","name":"Sodium, Na","unitName":"mg"}}]}`
+	}
+	st := newStats()
+	// Within 10% of the bound: kept as published (label rounding).
+	p, _ := m.planFood(food(t, js("g", 923, 105, 40000)), "FDC_BRANDED", st)
+	if p.Energy.Kcal == nil || len(p.Nutrients) != 2 || len(st.ImplausibleValues) != 0 {
+		t.Fatalf("near-bound values should stay: %+v %v", p, st.ImplausibleValues)
+	}
+	// Over it: dropped and counted, the rest of the food kept.
+	p, _ = m.planFood(food(t, js("g", 2000, 10.7, 1e6)), "FDC_BRANDED", st)
+	if p.Energy.Kcal != nil || p.Energy.Method != "other" || len(p.Nutrients) != 1 || p.Nutrients[0].NutrientID != 2 {
+		t.Errorf("impossible values should go: %+v", p)
+	}
+	if st.ImplausibleValues["energy (kcal)"] != 1 || st.ImplausibleValues["307 Sodium, Na"] != 1 {
+		t.Errorf("counts = %v", st.ImplausibleValues)
+	}
+	// Per 100 mL allows a density of 1.5: 140 g of sugar-like mass is fine.
+	p, _ = m.planFood(food(t, js("ml", 1300, 140, 0)), "FDC_BRANDED", newStats())
+	if p.Energy.Kcal == nil || len(p.Nutrients) != 2 {
+		t.Errorf("per 100 mL bounds: %+v", p)
+	}
+}
+
+func ftoa(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }

@@ -158,7 +158,7 @@ imp --file "$DATA/branded_r1.json" --release 2026-10
 out_has "import reports the dry run's nutrient rows" "nutrient rows +$dry_rows \(excluding energy\)"
 out_has "import reports the volume-basis food" "foods per 100 mL +1"
 out_has "import reports the identity fallback" "identity fallbacks +1"
-check "five branded versions (MG serving skipped)" 5 "SELECT count(*) FROM $BV"
+check "six branded versions (MG serving skipped)" 6 "SELECT count(*) FROM $BV"
 check "skipped food left no trace" 0 "SELECT count(*) FROM ref.food_version WHERE source_key = '3000003'"
 check "kind, brand (owner when no brand name), basis, label energy" "branded|MICHELE'S|per_100g|label|500" \
   "SELECT food_kind||'|'||brand||'|'||nutrient_basis||'|'||energy_method||'|'||$(nut 3000001 energy) FROM ref.food_version WHERE source_key = '3000001'"
@@ -180,13 +180,18 @@ check "UPC-A stored as GTIN-14" 00036000291452 "SELECT $(bc 3000001)"
 check "EAN-13 stored as GTIN-14" 04006381333931 "SELECT $(bc 3000002)"
 check "a code missing its check digit stores no barcode" "" "SELECT $(bc 3000006)"
 check "identity: GTIN, or fdcId without a valid barcode or when the GTIN is taken in the release" \
-  "fdc:3000005;fdc:3000006;gtin:00012345678905;gtin:00036000291452;gtin:04006381333931" \
+  "fdc:3000005;fdc:3000006;fdc:3000007;gtin:00012345678905;gtin:00036000291452;gtin:04006381333931" \
   "SELECT string_agg(identity_key, ';' ORDER BY identity_key) FROM ref.food_identity WHERE source_family = 'FDC_BRANDED'"
 check "both listings of one GTIN keep its barcode, both current" "00012345678905|00012345678905|2" \
   "SELECT $(bc 3000004)||'|'||$(bc 3000005)||'|'||(SELECT count(*) FROM ref.food_version WHERE source_key IN ('3000004','3000005') AND is_current)"
 check "branded categories in their own scheme" "Cereal" \
   "SELECT g.name FROM ref.food_version v JOIN ref.food_group g ON (g.scheme, g.group_code) = (v.group_scheme, v.group_code)
     WHERE v.source_key = '3000001' AND g.scheme = 'FDC_BRANDED_CATEGORY'"
+
+out_has "import reports the dropped implausible values" "implausible dropped +2 values"
+check "impossible energy and sodium dropped, plausible protein kept" "||10|other" \
+  "SELECT coalesce($(nut 3000007 energy)::text, '')||'|'||coalesce($(nut 3000007 sodium)::text, '')||'|'||$(nut 3000007 protein)||'|'||energy_method
+     FROM ref.food_version WHERE source_key = '3000007'"
 
 echo "-- Branded release 2: new fdcIds, same products"
 imp --file "$DATA/branded_r2.json" --release 2027-04

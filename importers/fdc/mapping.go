@@ -82,6 +82,7 @@ type importStats struct {
 	UnmappedNutrients  map[string]int `json:"unmapped_nutrients"`
 	UnitMismatches     map[string]int `json:"unit_mismatches"`
 	SkippedPortions    int            `json:"skipped_portions"`
+	ImplausibleValues  map[string]int `json:"implausible_values,omitempty"`
 	IdentityFallbacks  int            `json:"identity_fallbacks,omitempty"`
 	FoodsSkipped       map[string]int `json:"foods_skipped,omitempty"`
 	Barcodes           int            `json:"barcodes"`
@@ -95,12 +96,13 @@ func newStats() *importStats {
 		UnmappedNutrients: map[string]int{},
 		UnitMismatches:    map[string]int{},
 		FoodsSkipped:      map[string]int{},
+		ImplausibleValues: map[string]int{},
 	}
 }
 
 // mapNutrients turns FDC food nutrients into Atwater rows (per 100 g, in the
 // nutrient's canonical unit). Energy is excluded here; see pickEnergy.
-func (m *catalogMeta) mapNutrients(f *fdcFood, st *importStats) []mappedNutrient {
+func (m *catalogMeta) mapNutrients(f *fdcFood, st *importStats, basis string) []mappedNutrient {
 	seen := map[int16]bool{}
 	var out []mappedNutrient
 	for _, fn := range f.FoodNutrients {
@@ -124,10 +126,42 @@ func (m *catalogMeta) mapNutrients(f *fdcFood, st *importStats) []mappedNutrient
 		if amount < 0 || seen[info.ID] {
 			continue
 		}
+		if !m.plausibleMass(amount, info.Unit, basis) {
+			st.ImplausibleValues[num+" "+fn.Nutrient.Name]++
+			continue
+		}
 		seen[info.ID] = true
 		out = append(out, mappedNutrient{NutrientID: info.ID, Amount: round6(amount), Derivation: derivation(fn)})
 	}
 	return out
+}
+
+// Physical bounds on a nutrient vector. 100 g of food can't hold more than
+// 100 g of anything, nor more than 900 kcal (pure fat). Per 100 mL, a density
+// of 1.5 covers syrups and honey. The 10% allowance keeps label rounding on
+// near-pure products (sugar, oil labelled 120 kcal per 13 g) as published.
+// Above it the value is a data-entry error (FDC Branded 2026-10-29 has
+// sodium at 1,000,000 mg and folate at 393,000,000 µg per 100 g) and is
+// dropped and reported: unknown is honest, a clamped number is not.
+const plausibleAllowance = 1.1
+
+func basisGrams(basis string) float64 {
+	if basis == "per_100ml" {
+		return 150
+	}
+	return 100
+}
+
+func (m *catalogMeta) plausibleMass(amount float64, unit, basis string) bool {
+	u, ok := m.units[unit]
+	if !ok || u.Dimension != "mass" || u.ToBase == nil {
+		return true
+	}
+	return amount**u.ToBase <= basisGrams(basis)*plausibleAllowance
+}
+
+func plausibleKcal(kcal float64, basis string) bool {
+	return kcal <= 9*basisGrams(basis)*plausibleAllowance
 }
 
 func isEnergyNumber(n string) bool {

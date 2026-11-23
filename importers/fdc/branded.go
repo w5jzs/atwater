@@ -60,7 +60,11 @@ func (m *catalogMeta) planFood(f *fdcFood, datasetCode string, st *importStats) 
 		}
 		p.Portions = mapPortions(f, st)
 	}
-	p.Nutrients = m.mapNutrients(f, st)
+	if e := p.Energy.Kcal; e != nil && !plausibleKcal(*e, p.Basis) {
+		st.ImplausibleValues["energy (kcal)"]++
+		p.Energy.Kcal, p.Energy.Method = nil, "other"
+	}
+	p.Nutrients = m.mapNutrients(f, st, p.Basis)
 	return p, ""
 }
 

@@ -298,6 +298,10 @@ func report(st *importStats, took time.Duration, dry bool) {
 		fmt.Printf("  foods skipped         %d: %s\n", n, topN(st.FoodsSkipped, 10))
 	}
 	fmt.Printf("  foods without energy  %d\n", st.FoodsWithoutEnergy)
+	if n := sumValues(st.ImplausibleValues); n > 0 {
+		fmt.Printf("  implausible dropped   %d values; most common: %s\n", n, topN(st.ImplausibleValues, 6))
+		fmt.Println("                        (more than the food's own mass, or over 900 kcal per 100 g, +10%)")
+	}
 	if st.Barcodes+st.BarcodesInvalid > 0 {
 		fmt.Printf("  barcodes (GTIN-14)    %d (skipped %d invalid)\n", st.Barcodes, st.BarcodesInvalid)
 	}
